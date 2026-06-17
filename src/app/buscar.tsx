@@ -9,6 +9,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import CalendarModal from '../components/CalendarModal';
 import { Colors, Spacing, BorderRadius, Shadow } from '../constants/theme';
 import { FlightService } from '../services/flights.service';
 
@@ -112,27 +113,37 @@ function InputField({ value, onChangeText, placeholder, icon, keyboardType = 'de
   );
 }
 
-// ─── Date input (native <input type="date"> on web) ──────────────────────────
+// ─── Date input (triggers custom CalendarModal) ──────────────────────────
 function DateField({ value, onChange, icon, hasError }: { value: string; onChange: (v: string) => void; icon?: React.ComponentProps<typeof MaterialIcons>['name']; hasError?: boolean }) {
-  const [focused, setFocused] = useState(false);
-  if (Platform.OS === 'web') {
-    return (
-      <View style={[a.inputWrap, focused && a.inputWrapFocused, hasError && a.inputWrapError]}>
-        {icon && <MaterialIcons name={icon} size={18} color={Colors.titulo} style={a.inputIcon} />}
-        {/* @ts-ignore */}
-        <input
-          type="date"
-          value={value}
-          onChange={(e: any) => onChange(e.target.value)}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          style={{ flex: 1, border: 'none', background: 'transparent', fontSize: 13, color: Colors.extra1, outline: 'none', fontFamily: 'Poppins-Regular, sans-serif', width: '100%' } as any}
-        />
-      </View>
-    );
-  }
+  const [visible, setVisible] = useState(false);
+  
+  const formatDisplayDate = (dStr: string) => {
+    if (!dStr) return 'Seleccionar fecha';
+    const [y, m, d] = dStr.split('-');
+    return `${d}/${m}/${y}`;
+  };
+
   return (
-    <InputField value={value} onChangeText={onChange} placeholder="YYYY-MM-DD" icon={icon} hasError={hasError} />
+    <>
+      <TouchableOpacity
+        style={[a.inputWrap, hasError && a.inputWrapError]}
+        onPress={() => setVisible(true)}
+        activeOpacity={0.8}
+      >
+        {icon && <MaterialIcons name={icon} size={18} color={Colors.titulo} style={a.inputIcon} />}
+        <Text style={[a.input, { color: value ? Colors.extra1 : 'rgba(96,98,86,0.5)', paddingVertical: Platform.OS === 'web' ? 2 : 0 }]}>
+          {formatDisplayDate(value)}
+        </Text>
+        <MaterialIcons name="calendar-today" size={16} color={Colors.subtitulo} />
+      </TouchableOpacity>
+      
+      <CalendarModal
+        visible={visible}
+        value={value}
+        onSelect={onChange}
+        onClose={() => setVisible(false)}
+      />
+    </>
   );
 }
 
@@ -414,8 +425,8 @@ export default function SearchScreen() {
       <Navbar />
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-
-        {/* ── Search Header ── */}
+        <View style={s.main}>
+          {/* ── Search Header ── */}
         <View style={s.header}>
           <Text style={[s.title, { fontSize: isWide ? 38 : 26 }]}>¿A dónde vamos hoy?</Text>
           <Text style={s.subtitle}>Encuentra las mejores opciones para tu próximo viaje</Text>
@@ -842,6 +853,7 @@ export default function SearchScreen() {
 
           </View>
         </View>
+        </View>
 
         <Footer />
       </ScrollView>
@@ -863,6 +875,7 @@ const s = StyleSheet.create({
     flex: 1,
   },
   scroll: { flexGrow: 1 },
+  main: { flex: 1 },
 
   // Header
   header: {

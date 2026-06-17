@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, Image, ActivityIndicator, Platform,
+  ScrollView, Image, ActivityIndicator, Platform, Modal,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,7 +11,7 @@ import { buscarLodgings } from '../../services/lodging.service';
 import { Lodging } from '../../types/lodging.types';
 import { Colors, Spacing, BorderRadius, Shadow } from '../../constants/theme';
 
-const ITEMS = 5;
+const ITEMS = 4;
 
 function Stars({ n, size = 13 }: { n: number; size?: number }) {
   return (
@@ -115,6 +115,7 @@ export default function LodgingResultsScreen() {
   const [loading, setLoading] = useState(true);
   const [sortOption, setSortOption] = useState('recomendados');
   const [currentPage, setCurrentPage] = useState(1);
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
 
   // Filters
   const [precioMin, setPrecioMin] = useState(0);
@@ -164,6 +165,42 @@ export default function LodgingResultsScreen() {
 
   const goDetail = (h: Lodging) => router.push({ pathname: '/alojamiento/[id]', params: { id: h.id, provider: h.provider, llegada: params.llegada ?? '', salida: params.salida ?? '', adultos: params.adultos ?? '2', ninos: params.ninos ?? '0' } });
 
+  const activeTags = useMemo(() => {
+    const tags = [];
+    if (precioMin > 0 || precioMax < 300) {
+      tags.push({ label: `$${precioMin} – $${precioMax}`, type: 'precio' });
+    }
+    Object.entries(filtroEstrellas).forEach(([k, v]) => {
+      if (v) tags.push({ label: `${k} ★`, type: 'estrella', value: +k });
+    });
+    Object.entries(filtroTipos).forEach(([k, v]) => {
+      if (v) tags.push({ label: k, type: 'tipo', value: k });
+    });
+    Object.entries(filtroInstalaciones).forEach(([k, v]) => {
+      if (v) tags.push({ label: k, type: 'instalacion', value: k });
+    });
+    if (filtroNinos) tags.push({ label: 'Acepta niños', type: 'ninos' });
+    if (filtroMascotas) tags.push({ label: 'Acepta mascotas', type: 'mascotas' });
+    return tags;
+  }, [precioMin, precioMax, filtroEstrellas, filtroTipos, filtroInstalaciones, filtroNinos, filtroMascotas]);
+
+  const removerTag = (tag: any) => {
+    if (tag.type === 'precio') {
+      setPrecioMin(0); setPrecioMax(300);
+    } else if (tag.type === 'estrella') {
+      setFiltroEstrellas({ ...filtroEstrellas, [tag.value]: false });
+    } else if (tag.type === 'tipo') {
+      setFiltroTipos({ ...filtroTipos, [tag.value]: false });
+    } else if (tag.type === 'instalacion') {
+      setFiltroInstalaciones({ ...filtroInstalaciones, [tag.value]: false });
+    } else if (tag.type === 'ninos') {
+      setFiltroNinos(false);
+    } else if (tag.type === 'mascotas') {
+      setFiltroMascotas(false);
+    }
+    setCurrentPage(1);
+  };
+
   const limpiarFiltros = () => {
     setPrecioMin(0); setPrecioMax(300); setFiltroNinos(false); setFiltroMascotas(false);
     setFiltroEstrellas({ 5:false,4:false,3:false,2:false,1:false });
@@ -171,6 +208,47 @@ export default function LodgingResultsScreen() {
     setFiltroInstalaciones({ Piscina:false,Wifi:false,Spa:false,Gimnasio:false,Restaurante:false,Estacionamiento:false });
     setCurrentPage(1);
   };
+
+  const renderFiltersContent = () => (
+    <>
+      <SidebarSection title="Precio por noche">
+        <View style={s.priceInputRow}>
+          <View style={s.priceInputWrap}>
+            <Text style={s.currencyPrefix}>$</Text>
+            <TextInput style={s.priceInp} value={String(precioMin)} onChangeText={v => { setPrecioMin(+v||0); setCurrentPage(1); }} keyboardType="numeric" />
+          </View>
+          <View style={s.priceInputWrap}>
+            <Text style={s.currencyPrefix}>$</Text>
+            <TextInput style={s.priceInp} value={String(precioMax)} onChangeText={v => { setPrecioMax(+v||300); setCurrentPage(1); }} keyboardType="numeric" />
+          </View>
+        </View>
+        <Text style={s.priceHint}>$0 USD — $300+ USD</Text>
+      </SidebarSection>
+
+      <SidebarSection title="Tipo de alojamiento">
+        {(['Hotel','Hostal','Motel','Apartamento'] as const).map(t => (
+          <FilterCheck key={t} label={t + 's'} checked={filtroTipos[t]} onToggle={() => { setFiltroTipos({...filtroTipos,[t]:!filtroTipos[t]}); setCurrentPage(1); }} />
+        ))}
+      </SidebarSection>
+
+      <SidebarSection title="Instalaciones">
+        {(['Piscina','Wifi','Spa','Gimnasio','Restaurante','Estacionamiento'] as const).map(sv => (
+          <FilterCheck key={sv} label={sv} checked={filtroInstalaciones[sv]} onToggle={() => { setFiltroInstalaciones({...filtroInstalaciones,[sv]:!filtroInstalaciones[sv]}); setCurrentPage(1); }} />
+        ))}
+      </SidebarSection>
+
+      <SidebarSection title="Categoría">
+        {[5,4,3,2,1].map(e => (
+          <FilterCheck key={e} label={'★'.repeat(e) + '☆'.repeat(5-e)} checked={filtroEstrellas[e]} onToggle={() => { setFiltroEstrellas({...filtroEstrellas,[e]:!filtroEstrellas[e]}); setCurrentPage(1); }} />
+        ))}
+      </SidebarSection>
+
+      <SidebarSection title="Políticas de Grupo">
+        <FilterCheck label="Acepta niños" checked={filtroNinos} onToggle={() => { setFiltroNinos(!filtroNinos); setCurrentPage(1); }} />
+        <FilterCheck label="Acepta mascotas" checked={filtroMascotas} onToggle={() => { setFiltroMascotas(!filtroMascotas); setCurrentPage(1); }} />
+      </SidebarSection>
+    </>
+  );
 
   return (
     <View style={s.root}>
@@ -206,63 +284,57 @@ export default function LodgingResultsScreen() {
 
         {/* Results bar */}
         <View style={s.resultsBar}>
-          <View style={{ flex: 1 }}>
+          <View style={{ flex: 1, alignSelf: 'stretch', justifyContent: 'center' }}>
             <Text style={s.resultsCount}>
               <Text style={{ fontWeight: '700' }}>{filtered.length} alojamiento{filtered.length !== 1 ? 's' : ''}</Text>
               {' '}disponible{filtered.length !== 1 ? 's' : ''}
               {params.destino ? <Text style={{ fontStyle: 'italic' }}> en {params.destino}</Text> : null}
             </Text>
           </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          
+          {/* Sorting Option */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 4 }}>
             {[{ v:'recomendados',l:'Recomendados' },{ v:'valoracion',l:'Mayor valoración' },{ v:'precio_asc',l:'Menor precio' },{ v:'precio_desc',l:'Mayor precio' },{ v:'nombre',l:'Nombre A–Z' }].map(opt => (
               <TouchableOpacity key={opt.v} style={[s.sortChip, sortOption === opt.v && s.sortChipOn]} onPress={() => { setSortOption(opt.v); setCurrentPage(1); }}>
                 <Text style={[s.sortChipText, sortOption === opt.v && { color: Colors.titulo, fontWeight: '600' }]}>{opt.l}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
+
+          {/* Mobile Filter Toggle */}
+          {Platform.OS !== 'web' && (
+            <TouchableOpacity style={s.mobileFilterBtn} onPress={() => setShowMobileFilters(true)}>
+              <Ionicons name="options-outline" size={16} color="#fff" />
+              <Text style={s.mobileFilterBtnText}>Filtros ({activeTags.length})</Text>
+            </TouchableOpacity>
+          )}
         </View>
+
+        {/* Active Tags Bar */}
+        {activeTags.length > 0 && (
+          <View style={s.tagsContainer}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tagsList}>
+              {activeTags.map((tag, idx) => (
+                <View key={idx} style={s.tagChip}>
+                  <Text style={s.tagChipLabel}>{tag.label}</Text>
+                  <TouchableOpacity onPress={() => removerTag(tag)} style={s.tagChipClose}>
+                    <Ionicons name="close" size={12} color={Colors.titulo} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+              <TouchableOpacity onPress={limpiarFiltros} style={s.clearTagsBtn}>
+                <Text style={s.clearTagsBtnText}>Limpiar filtros</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        )}
 
         {/* Body: Sidebar + Results */}
         <View style={s.pageBody}>
-          {/* Sidebar */}
+          {/* Sidebar (Web Only) */}
           {Platform.OS === 'web' && (
             <View style={s.sidebar}>
-              <SidebarSection title="Precio por noche">
-                <View style={s.priceInputRow}>
-                  <View style={s.priceInputWrap}>
-                    <Text style={s.currencyPrefix}>$</Text>
-                    <TextInput style={s.priceInp} value={String(precioMin)} onChangeText={v => { setPrecioMin(+v||0); setCurrentPage(1); }} keyboardType="numeric" />
-                  </View>
-                  <View style={s.priceInputWrap}>
-                    <Text style={s.currencyPrefix}>$</Text>
-                    <TextInput style={s.priceInp} value={String(precioMax)} onChangeText={v => { setPrecioMax(+v||300); setCurrentPage(1); }} keyboardType="numeric" />
-                  </View>
-                </View>
-                <Text style={s.priceHint}>$0 USD — $300+ USD</Text>
-              </SidebarSection>
-
-              <SidebarSection title="Tipo de alojamiento">
-                {(['Hotel','Hostal','Motel','Apartamento'] as const).map(t => (
-                  <FilterCheck key={t} label={t + 's'} checked={filtroTipos[t]} onToggle={() => { setFiltroTipos({...filtroTipos,[t]:!filtroTipos[t]}); setCurrentPage(1); }} />
-                ))}
-              </SidebarSection>
-
-              <SidebarSection title="Instalaciones">
-                {(['Piscina','Wifi','Spa','Gimnasio','Restaurante','Estacionamiento'] as const).map(sv => (
-                  <FilterCheck key={sv} label={sv} checked={filtroInstalaciones[sv]} onToggle={() => { setFiltroInstalaciones({...filtroInstalaciones,[sv]:!filtroInstalaciones[sv]}); setCurrentPage(1); }} />
-                ))}
-              </SidebarSection>
-
-              <SidebarSection title="Categoría">
-                {[5,4,3,2,1].map(e => (
-                  <FilterCheck key={e} label={'★'.repeat(e) + '☆'.repeat(5-e)} checked={filtroEstrellas[e]} onToggle={() => { setFiltroEstrellas({...filtroEstrellas,[e]:!filtroEstrellas[e]}); setCurrentPage(1); }} />
-                ))}
-              </SidebarSection>
-
-              <SidebarSection title="Políticas de Grupo">
-                <FilterCheck label="Acepta niños" checked={filtroNinos} onToggle={() => { setFiltroNinos(!filtroNinos); setCurrentPage(1); }} />
-                <FilterCheck label="Acepta mascotas" checked={filtroMascotas} onToggle={() => { setFiltroMascotas(!filtroMascotas); setCurrentPage(1); }} />
-              </SidebarSection>
+              {renderFiltersContent()}
             </View>
           )}
 
@@ -306,6 +378,29 @@ export default function LodgingResultsScreen() {
 
         <Footer />
       </ScrollView>
+
+      {/* Mobile Filters Modal */}
+      <Modal visible={showMobileFilters} animationType="slide" transparent={false} onRequestClose={() => setShowMobileFilters(false)}>
+        <View style={s.modalContainer}>
+          <View style={s.modalHeader}>
+            <Text style={s.modalTitle}>Filtros</Text>
+            <TouchableOpacity onPress={() => setShowMobileFilters(false)} style={s.modalCloseBtn}>
+              <Ionicons name="close" size={24} color={Colors.extra1} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={s.modalScroll} contentContainerStyle={s.modalScrollContent}>
+            {renderFiltersContent()}
+          </ScrollView>
+          <View style={s.modalFooter}>
+            <TouchableOpacity style={s.modalClearBtn} onPress={() => { limpiarFiltros(); setShowMobileFilters(false); }}>
+              <Text style={s.modalClearBtnText}>Restablecer</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.modalApplyBtn} onPress={() => setShowMobileFilters(false)}>
+              <Text style={s.modalApplyBtnText}>Ver {filtered.length} resultados</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -338,7 +433,6 @@ function PagBtn({ icon, onPress, disabled }: { icon: any; onPress: () => void; d
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.bg },
   scroll: { flexGrow: 1 },
@@ -392,6 +486,23 @@ const s = StyleSheet.create({
   sortChipOn: { borderColor: Colors.titulo, backgroundColor: Colors.primaryLight },
   sortChipText: { fontSize: 12, color: Colors.subtitulo },
 
+  mobileFilterBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: Colors.titulo, borderRadius: BorderRadius.md,
+    paddingVertical: 8, paddingHorizontal: 16, marginTop: 8,
+    alignSelf: 'stretch', justifyContent: 'center',
+    ...Shadow.sm,
+  },
+  mobileFilterBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+
+  tagsContainer: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, backgroundColor: 'rgba(251,248,234,0.5)', borderBottomWidth: 1, borderBottomColor: Colors.border },
+  tagsList: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  tagChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.primaryLight, borderWidth: 1, borderColor: Colors.border, borderRadius: 6, paddingLeft: 8, paddingRight: 4, paddingVertical: 4 },
+  tagChipLabel: { fontSize: 11, color: Colors.titulo, fontWeight: '600' },
+  tagChipClose: { padding: 2 },
+  clearTagsBtn: { paddingHorizontal: 6 },
+  clearTagsBtnText: { fontSize: 11, color: Colors.titulo, fontWeight: '700', textDecorationLine: 'underline' },
+
   pageBody: { flexDirection: Platform.OS === 'web' ? 'row' : 'column', alignItems: 'flex-start' },
   sidebar: { width: 260, padding: Spacing.lg, borderRightWidth: 1, borderRightColor: Colors.border },
   priceInputRow: { flexDirection: 'row', gap: Spacing.sm, marginTop: 8 },
@@ -400,18 +511,30 @@ const s = StyleSheet.create({
   priceInp: { flex: 1, fontSize: 13, color: Colors.extra1 },
   priceHint: { fontSize: 11, color: Colors.textMuted, marginTop: 4 },
 
-  resultsArea: { flex: 1, padding: Spacing.lg, gap: Spacing.md },
-  stateBox: { alignItems: 'center', padding: Spacing.xxl, gap: Spacing.md },
+  resultsArea: { flex: 1, padding: Spacing.lg, gap: Spacing.md, width: '100%' },
+  stateBox: { alignItems: 'center', padding: Spacing.xxl, gap: Spacing.md, width: '100%' },
   stateTitle: { fontSize: 18, fontWeight: '600', color: Colors.titulo, textAlign: 'center' },
   stateText: { fontSize: 14, color: Colors.subtitulo, textAlign: 'center', maxWidth: 340 },
   clearBtn: { marginTop: Spacing.sm, backgroundColor: Colors.primaryLight, borderRadius: BorderRadius.md, paddingVertical: 12, paddingHorizontal: Spacing.xl },
   clearBtnText: { color: Colors.titulo, fontWeight: '600', fontSize: 14 },
 
-  pagination: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: Spacing.xs, marginTop: Spacing.xl },
+  pagination: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: Spacing.xs, marginTop: Spacing.xl, width: '100%' },
   pagBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.border },
   pagNumBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.border },
   pagNumBtnOn: { borderColor: Colors.titulo, backgroundColor: Colors.primaryLight },
   pagNum: { fontSize: 13, color: Colors.subtitulo },
+
+  modalContainer: { flex: 1, backgroundColor: Colors.bg },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.border, backgroundColor: Colors.surface },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: Colors.titulo, fontFamily: 'PlayfairDisplay-Bold' },
+  modalCloseBtn: { padding: 4 },
+  modalScroll: { flex: 1 },
+  modalScrollContent: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xxl },
+  modalFooter: { flexDirection: 'row', gap: Spacing.md, padding: Spacing.lg, borderTopWidth: 1, borderTopColor: Colors.border, backgroundColor: Colors.surface },
+  modalClearBtn: { flex: 1, borderHeight: 1.5, borderColor: Colors.border, borderRadius: BorderRadius.md, borderWidth: 1.5, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' },
+  modalClearBtnText: { color: Colors.subtitulo, fontWeight: '700', fontSize: 14 },
+  modalApplyBtn: { flex: 2, backgroundColor: Colors.titulo, borderRadius: BorderRadius.md, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' },
+  modalApplyBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 });
 
 const sb = StyleSheet.create({
@@ -461,14 +584,14 @@ const c = StyleSheet.create({
   chipNinos: { backgroundColor: 'rgba(33,150,243,0.1)', borderColor: 'rgba(33,150,243,0.3)' },
   chipMascotas: { backgroundColor: 'rgba(76,175,80,0.1)', borderColor: 'rgba(76,175,80,0.3)' },
 
-  footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: Spacing.xs },
+  footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: Spacing.xs, flexWrap: 'wrap', gap: Spacing.sm },
   rating: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
   ratingNum: { fontSize: 24, fontWeight: '800', color: '#27ae60' },
   ratingLabel: { fontSize: 12, fontWeight: '600', color: Colors.extra1 },
   ratingCount: { fontSize: 11, color: Colors.subtitulo },
   noRating: { fontSize: 12, color: Colors.textMuted, fontStyle: 'italic' },
 
-  priceBlock: { alignItems: 'flex-end', gap: Spacing.xs },
+  priceBlock: { alignItems: 'flex-end', gap: Spacing.xs, flex: 1, minWidth: 160 },
   desde: { fontSize: 11, color: Colors.textMuted },
   price: { fontSize: 22, fontWeight: '800', color: Colors.titulo },
   priceDollar: { fontSize: 16, fontWeight: '600' },

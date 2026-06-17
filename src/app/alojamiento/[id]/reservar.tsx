@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import Navbar from '../../../components/Navbar';
@@ -11,27 +11,61 @@ export default function LodgingBookingScreen() {
   const params = useLocalSearchParams<{
     id?: string; provider?: string; roomId?: string; roomName?: string;
     precio?: string; llegada?: string; salida?: string; adultos?: string; ninos?: string;
+    seleccion?: string;
   }>();
 
-  const precioNoche = parseFloat(params.precio ?? '0');
-  const nights = (() => {
+  const selectedRooms = useMemo(() => {
+    try {
+      return params.seleccion ? JSON.parse(params.seleccion) : [];
+    } catch {
+      return [];
+    }
+  }, [params.seleccion]);
+
+  const nights = useMemo(() => {
     if (!params.llegada || !params.salida) return 1;
     return Math.max(1, Math.round((new Date(params.salida).getTime() - new Date(params.llegada).getTime()) / 86400000));
-  })();
-  const subtotal = precioNoche * nights;
+  }, [params.llegada, params.salida]);
+
+  const subtotal = useMemo(() => {
+    if (selectedRooms.length > 0) {
+      return selectedRooms.reduce((sum: number, sel: any) => sum + (sel.precio * sel.habitaciones), 0) * nights;
+    }
+    const precioNoche = parseFloat(params.precio ?? '0');
+    return precioNoche * nights;
+  }, [selectedRooms, params.precio, nights]);
+
   const iva = +(subtotal * 0.15).toFixed(2);
   const total = +(subtotal + iva).toFixed(2);
+
+  const roomDescription = useMemo(() => {
+    if (selectedRooms.length > 0) {
+      return selectedRooms.map((sel: any) => `${sel.roomName} (x${sel.habitaciones})`).join(', ');
+    }
+    return params.roomName ?? 'Habitación';
+  }, [selectedRooms, params.roomName]);
+
+  const itemDetails = useMemo(() => {
+    if (selectedRooms.length > 0) {
+      return selectedRooms.map((sel: any) => ({
+        name: `${sel.roomName} (x${sel.habitaciones}) × ${nights} noches`,
+        value: sel.precio * sel.habitaciones * nights
+      }));
+    }
+    return [{ name: `${roomDescription} × ${nights} noches`, value: subtotal }];
+  }, [selectedRooms, roomDescription, nights, subtotal]);
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.bg }}>
       <Navbar />
       <ScrollView contentContainerStyle={{ flexGrow: 1, paddingTop: 12 }}>
+        
         {/* Booking summary header */}
         <View style={s.bookingHeader}>
-          <Text style={s.bookingTitle}>Reservar habitación</Text>
-          <Text style={s.bookingRoom}>{params.roomName}</Text>
+          <Text style={s.bookingTitle}>Reservar alojamiento</Text>
+          <Text style={s.bookingRoom} numberOfLines={2}>{roomDescription}</Text>
           <Text style={s.bookingDates}>
-            {params.llegada} → {params.salida} · {nights} noche{nights > 1 ? 's' : ''} · {params.adultos} adultos
+            {params.llegada} → {params.salida} · {nights} noche{nights > 1 ? 's' : ''} · {params.adultos} adultos{params.ninos && params.ninos !== '0' ? ` y ${params.ninos} niños` : ''}
           </Text>
         </View>
 
@@ -40,12 +74,21 @@ export default function LodgingBookingScreen() {
           iva={iva}
           total={total}
           ivaLabel="15%"
-          itemName={params.roomName ?? 'Habitación'}
-          customDetails={[{ name: `${params.roomName ?? 'Habitación'} × ${nights} noches`, value: subtotal }]}
-          onPagoExitoso={() => router.push({ pathname: '/alojamiento/confirmacion', params: { roomName: params.roomName, llegada: params.llegada, salida: params.salida, total: String(total) } })}
+          itemName={roomDescription}
+          customDetails={itemDetails}
+          onPagoExitoso={() => router.push({
+            pathname: '/alojamiento/confirmacion',
+            params: {
+              roomName: roomDescription,
+              llegada: params.llegada ?? '',
+              salida: params.salida ?? '',
+              total: String(total),
+            }
+          })}
           onCancel={() => router.back()}
           buttonLabel="Confirmar reserva"
         />
+        
         <Footer />
       </ScrollView>
     </View>
@@ -58,7 +101,7 @@ const s = StyleSheet.create({
     paddingBottom: Spacing.lg,
     gap: 4,
   },
-  bookingTitle: { fontSize: 22, fontWeight: '700', color: Colors.titulo },
-  bookingRoom: { fontSize: 16, color: Colors.extra2, fontWeight: '600' },
+  bookingTitle: { fontSize: 22, fontWeight: '700', color: Colors.titulo, fontFamily: 'PlayfairDisplay-Bold' },
+  bookingRoom: { fontSize: 15, color: Colors.extra2, fontWeight: '600' },
   bookingDates: { fontSize: 13, color: Colors.subtitulo },
 });

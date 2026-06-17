@@ -53,54 +53,56 @@ export default function HomeScreen() {
   return (
     <View style={s.root}>
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-        {/* ── HERO ── */}
-        <View style={[s.hero, { height: Platform.OS === 'web' ? '100vh' as any : height }]}>
-          <VideoView
-            style={s.video}
-            player={player}
-            fullscreenOptions={{ enable: false }}
-            allowsPictureInPicture={false}
-            nativeControls={false}
-            contentFit="cover"
-            pointerEvents="none"
-          />
+        <View style={s.main}>
+          {/* ── HERO ── */}
+          <View style={[s.hero, { height: Platform.OS === 'web' ? '100vh' as any : height }]}>
+            <VideoView
+              style={s.video}
+              player={player}
+              fullscreenOptions={{ enable: false }}
+              allowsPictureInPicture={false}
+              nativeControls={false}
+              contentFit="cover"
+              pointerEvents="none"
+            />
 
-          {/* Dark gradient overlay */}
-          <LinearGradient
-            colors={['rgba(70,64,60,0.35)', 'rgba(70,64,60,0.60)', 'rgba(70,64,60,0.80)']}
-            style={s.heroOverlay}
-          />
+            {/* Dark gradient overlay */}
+            <LinearGradient
+              colors={['rgba(70,64,60,0.35)', 'rgba(70,64,60,0.60)', 'rgba(70,64,60,0.80)']}
+              style={s.heroOverlay}
+            />
 
-          {/* Transparent navbar — lives inside the hero so it overlays the video */}
-          <Navbar transparent />
+            {/* Transparent navbar — lives inside the hero so it overlays the video */}
+            <Navbar transparent />
 
-          {/* Hero content */}
-          <View style={[s.heroContent, { paddingHorizontal: heroPadH }]}>
-            <Text style={[s.heroTitle, { fontSize: titleSize }]}>
-              ¿A dónde vamos hoy?
-            </Text>
-            <Text style={[s.heroSub, { fontSize: subtitleSize }]}>
-              Pooking.com
-            </Text>
+            {/* Hero content */}
+            <View style={[s.heroContent, { paddingHorizontal: heroPadH }]}>
+              <Text style={[s.heroTitle, { fontSize: titleSize }]}>
+                ¿A dónde vamos hoy?
+              </Text>
+              <Text style={[s.heroSub, { fontSize: subtitleSize }]}>
+                Pooking.com
+              </Text>
 
-            {/* Category grid — 2×2 on mobile, 1×4 on tablet/desktop */}
-            <View style={[s.categories, isMobile && s.categoriesMobile]}>
-              {CATEGORIES.map((cat) => (
-                <TouchableOpacity
-                  key={cat.tab}
-                  style={[
-                    s.catBtn,
-                    isMobile
-                      ? s.catBtnMobile          // 2-per-row on mobile
-                      : { minWidth: 110 },
-                  ]}
-                  onPress={() => nav(cat.tab)}
-                  activeOpacity={0.8}
-                >
-                  <MaterialIcons name={cat.icon} size={catIconSize} color="#fff" />
-                  <Text style={s.catLabel}>{cat.label}</Text>
-                </TouchableOpacity>
-              ))}
+              {/* Category grid — 2×2 on mobile, 1×4 on tablet/desktop */}
+              <View style={[s.categories, isMobile && s.categoriesMobile]}>
+                {CATEGORIES.map((cat) => (
+                  <TouchableOpacity
+                    key={cat.tab}
+                    style={[
+                      s.catBtn,
+                      isMobile
+                        ? s.catBtnMobile          // 2-per-row on mobile
+                        : { minWidth: 110 },
+                    ]}
+                    onPress={() => nav(cat.tab)}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialIcons name={cat.icon} size={catIconSize} color="#fff" />
+                    <Text style={s.catLabel}>{cat.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           </View>
         </View>
@@ -114,6 +116,7 @@ export default function HomeScreen() {
 const s = StyleSheet.create({
   root:   { flex: 1, backgroundColor: Colors.bg },
   scroll: { flexGrow: 1 },
+  main:   { flex: 1 },
 
   // ── Hero ──────────────────────────────────────────────────────────────────
   hero: {

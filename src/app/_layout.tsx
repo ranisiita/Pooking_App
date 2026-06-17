@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as Font from 'expo-font';
@@ -20,9 +21,11 @@ const FONTS = {
 
 export default function RootLayout() {
   useEffect(() => {
-    Font.loadAsync(FONTS).catch(() => {
-      // Fonts may fail silently on web (handled by CSS). Native falls back to system font.
-    });
+    if (Platform.OS !== 'web') {
+      Font.loadAsync(FONTS).catch(() => {
+        // Fonts may fail silently. Native falls back to system font.
+      });
+    }
   }, []);
 
   return (
