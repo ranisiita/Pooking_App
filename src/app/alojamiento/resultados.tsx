@@ -2,16 +2,19 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, Image, ActivityIndicator, Platform, Modal,
+  ImageBackground, useWindowDimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Navbar from '../../components/Navbar';
 import Footer from '../../components/Footer';
+import CalendarModal from '../../components/CalendarModal';
 import { buscarLodgings } from '../../services/lodging.service';
 import { Lodging } from '../../types/lodging.types';
 import { Colors, Spacing, BorderRadius, Shadow } from '../../constants/theme';
 
 const ITEMS = 4;
+const BG_NATIVE = require('../../../public/images/search_resultado_fondo.jpg');
 
 function Stars({ n, size = 13 }: { n: number; size?: number }) {
   return (
@@ -29,13 +32,13 @@ const SERVICE_ICONS: Record<string, any> = {
   'Estacionamiento': 'car-outline', 'Desayuno': 'cafe-outline',
 };
 
-function HotelCard({ h, onPress }: { h: Lodging; onPress: () => void }) {
+function HotelCard({ h, onPress, isWide }: { h: Lodging; onPress: () => void; isWide: boolean }) {
   return (
-    <TouchableOpacity style={c.card} onPress={onPress} activeOpacity={0.92}>
+    <TouchableOpacity style={[c.card, { flexDirection: isWide ? 'row' : 'column' }]} onPress={onPress} activeOpacity={0.92}>
       {/* Image column */}
-      <View style={c.imgWrap}>
+      <View style={[c.imgWrap, { width: isWide ? 260 : '100%', height: isWide ? 'auto' : 200 }]}>
         {h.imagen
-          ? <Image source={{ uri: h.imagen }} style={c.img} resizeMode="cover" />
+          ? <Image source={{ uri: h.imagen }} style={[c.img, { height: isWide ? 240 : 200 }]} resizeMode="cover" />
           : <View style={c.imgPlaceholder}><Ionicons name="bed-outline" size={40} color={Colors.extra2} /></View>}
         <View style={c.badgeTipo}><Text style={c.badgeTipoText}>{h.tipo}</Text></View>
         <View style={c.starsRow}><Stars n={h.categoria} /></View>
@@ -110,12 +113,26 @@ function HotelCard({ h, onPress }: { h: Lodging; onPress: () => void }) {
 export default function LodgingResultsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ destino?: string; llegada?: string; salida?: string; habitaciones?: string; adultos?: string; ninos?: string }>();
+  const { width } = useWindowDimensions();
+  const isWide = width >= 850;
 
   const [lodgings, setLodgings] = useState<Lodging[]>([]);
   const [loading, setLoading] = useState(true);
   const [sortOption, setSortOption] = useState('recomendados');
   const [currentPage, setCurrentPage] = useState(1);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
+
+  // Search Fields state (for editing search on this page)
+  const [destinoSearch, setDestinoSearch] = useState(params.destino || '');
+  const [llegadaSearch, setLlegadaSearch] = useState(params.llegada || '');
+  const [salidaSearch, setSalidaSearch] = useState(params.salida || '');
+  const [habitacionesSearch, setHabitacionesSearch] = useState(params.habitaciones || '1');
+  const [adultosSearch, setAdultosSearch] = useState(params.adultos || '2');
+  const [ninosSearch, setNinosSearch] = useState(params.ninos || '0');
+
+  // Date Pickers state
+  const [showLlegadaSearchPicker, setShowLlegadaSearchPicker] = useState(false);
+  const [showSalidaSearchPicker, setShowSalidaSearchPicker] = useState(false);
 
   // Filters
   const [precioMin, setPrecioMin] = useState(0);
@@ -124,9 +141,16 @@ export default function LodgingResultsScreen() {
   const [filtroMascotas, setFiltroMascotas] = useState(false);
   const [filtroEstrellas, setFiltroEstrellas] = useState<Record<number,boolean>>({ 5:false, 4:false, 3:false, 2:false, 1:false });
   const [filtroTipos, setFiltroTipos] = useState<Record<string,boolean>>({ Hotel:false, Hostal:false, Motel:false, Apartamento:false });
-  const [filtroInstalaciones, setFiltroInstalaciones] = useState<Record<string,boolean>>({ Piscina:false, Wifi:false, Spa:false, Gimnasio:false, Restaurante:false, Estacionamiento:false });
 
+  // Sync state if URL changes
   useEffect(() => {
+    setDestinoSearch(params.destino || '');
+    setLlegadaSearch(params.llegada || '');
+    setSalidaSearch(params.salida || '');
+    setHabitacionesSearch(params.habitaciones || '1');
+    setAdultosSearch(params.adultos || '2');
+    setNinosSearch(params.ninos || '0');
+
     setLoading(true);
     buscarLodgings({
       destino: params.destino,
@@ -136,7 +160,29 @@ export default function LodgingResultsScreen() {
       ninos: params.ninos ? +params.ninos : undefined,
       habitaciones: params.habitaciones ? +params.habitaciones : undefined,
     }).then(data => { setLodgings(data); setLoading(false); });
-  }, [params.destino, params.llegada, params.salida]);
+  }, [params.destino, params.llegada, params.salida, params.habitaciones, params.adultos, params.ninos]);
+
+  const executeNewSearch = () => {
+    router.setParams({
+      destino: destinoSearch,
+      llegada: llegadaSearch,
+      salida: salidaSearch,
+      habitaciones: habitacionesSearch,
+      adultos: adultosSearch,
+      ninos: ninosSearch,
+    });
+  };
+
+  const formatDisplayDate = (dStr: string) => {
+    if (!dStr) return 'Seleccionar';
+    const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    try {
+      const [y, m, d] = dStr.split('-');
+      return `${parseInt(d)} ${months[parseInt(m) - 1]} ${y}`;
+    } catch {
+      return dStr;
+    }
+  };
 
   const filtered = useMemo(() => {
     let r = lodgings.filter(h => {
@@ -148,8 +194,6 @@ export default function LodgingResultsScreen() {
       if (eStr.length > 0 && !eStr.includes(h.categoria)) return false;
       const tipos = Object.entries(filtroTipos).filter(([,v]) => v).map(([k]) => k);
       if (tipos.length > 0 && !tipos.includes(h.tipo)) return false;
-      const servs = Object.entries(filtroInstalaciones).filter(([,v]) => v).map(([k]) => k);
-      if (servs.length > 0 && !servs.every(sv => h.servicios?.includes(sv))) return false;
       return true;
     });
     if (sortOption === 'precio_asc') r.sort((a,b) => a.precio - b.precio);
@@ -158,7 +202,7 @@ export default function LodgingResultsScreen() {
     else if (sortOption === 'nombre') r.sort((a,b) => a.nombre.localeCompare(b.nombre));
     else r.sort((a,b) => (b.valoracion*100 - b.precio) - (a.valoracion*100 - a.precio));
     return r;
-  }, [lodgings, precioMin, precioMax, filtroNinos, filtroMascotas, filtroEstrellas, filtroTipos, filtroInstalaciones, sortOption]);
+  }, [lodgings, precioMin, precioMax, filtroNinos, filtroMascotas, filtroEstrellas, filtroTipos, sortOption]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS));
   const paged = filtered.slice((currentPage-1)*ITEMS, currentPage*ITEMS);
@@ -176,13 +220,10 @@ export default function LodgingResultsScreen() {
     Object.entries(filtroTipos).forEach(([k, v]) => {
       if (v) tags.push({ label: k, type: 'tipo', value: k });
     });
-    Object.entries(filtroInstalaciones).forEach(([k, v]) => {
-      if (v) tags.push({ label: k, type: 'instalacion', value: k });
-    });
     if (filtroNinos) tags.push({ label: 'Acepta niños', type: 'ninos' });
     if (filtroMascotas) tags.push({ label: 'Acepta mascotas', type: 'mascotas' });
     return tags;
-  }, [precioMin, precioMax, filtroEstrellas, filtroTipos, filtroInstalaciones, filtroNinos, filtroMascotas]);
+  }, [precioMin, precioMax, filtroEstrellas, filtroTipos, filtroNinos, filtroMascotas]);
 
   const removerTag = (tag: any) => {
     if (tag.type === 'precio') {
@@ -191,8 +232,6 @@ export default function LodgingResultsScreen() {
       setFiltroEstrellas({ ...filtroEstrellas, [tag.value]: false });
     } else if (tag.type === 'tipo') {
       setFiltroTipos({ ...filtroTipos, [tag.value]: false });
-    } else if (tag.type === 'instalacion') {
-      setFiltroInstalaciones({ ...filtroInstalaciones, [tag.value]: false });
     } else if (tag.type === 'ninos') {
       setFiltroNinos(false);
     } else if (tag.type === 'mascotas') {
@@ -205,7 +244,6 @@ export default function LodgingResultsScreen() {
     setPrecioMin(0); setPrecioMax(300); setFiltroNinos(false); setFiltroMascotas(false);
     setFiltroEstrellas({ 5:false,4:false,3:false,2:false,1:false });
     setFiltroTipos({ Hotel:false,Hostal:false,Motel:false,Apartamento:false });
-    setFiltroInstalaciones({ Piscina:false,Wifi:false,Spa:false,Gimnasio:false,Restaurante:false,Estacionamiento:false });
     setCurrentPage(1);
   };
 
@@ -231,12 +269,6 @@ export default function LodgingResultsScreen() {
         ))}
       </SidebarSection>
 
-      <SidebarSection title="Instalaciones">
-        {(['Piscina','Wifi','Spa','Gimnasio','Restaurante','Estacionamiento'] as const).map(sv => (
-          <FilterCheck key={sv} label={sv} checked={filtroInstalaciones[sv]} onToggle={() => { setFiltroInstalaciones({...filtroInstalaciones,[sv]:!filtroInstalaciones[sv]}); setCurrentPage(1); }} />
-        ))}
-      </SidebarSection>
-
       <SidebarSection title="Categoría">
         {[5,4,3,2,1].map(e => (
           <FilterCheck key={e} label={'★'.repeat(e) + '☆'.repeat(5-e)} checked={filtroEstrellas[e]} onToggle={() => { setFiltroEstrellas({...filtroEstrellas,[e]:!filtroEstrellas[e]}); setCurrentPage(1); }} />
@@ -254,36 +286,131 @@ export default function LodgingResultsScreen() {
     <View style={s.root}>
       <Navbar />
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-        {/* Search Hero Banner */}
-        <View style={s.heroBanner}>
-          <View style={s.heroOverlay} />
+        <View style={s.mainContent}>
+        
+        {/* Search Hero Banner (Matches Screenshot) */}
+        <View
+          style={[
+            s.heroBanner,
+            Platform.OS === 'web' && {
+              backgroundImage: `linear-gradient(rgba(55, 34, 31, 0.72), rgba(55, 34, 31, 0.72)), url('/images/search_resultado_fondo.jpg')`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat',
+            } as any,
+          ]}
+        >
+          {Platform.OS !== 'web' && (
+            <>
+              <Image source={BG_NATIVE} style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }} resizeMode="cover" />
+              <View style={s.heroOverlay} />
+            </>
+          )}
           <View style={s.heroContainer}>
             <Text style={s.heroTitle}>Explora tu próximo destino</Text>
-            <View style={s.searchBarCompact}>
-              <View style={s.sbField}>
-                <Text style={s.sbLabel}>Destino</Text>
-                <Text style={s.sbValue}>{params.destino || '—'}</Text>
+            
+            {/* Interactive Search Panel */}
+            <View style={s.searchPanel}>
+              {/* Row 1: Destino + Llegada + Salida */}
+              <View style={[s.spRow, isWide && s.spRowWide]}>
+                
+                {/* Destino */}
+                <View style={s.spFieldDestino}>
+                  <Text style={s.spLabel}>Destino</Text>
+                  <View style={s.spInputWrap}>
+                    <Ionicons name="location" size={16} color="#C6B17D" style={s.spIcon} />
+                    <TextInput
+                      style={s.spInput}
+                      value={destinoSearch}
+                      onChangeText={setDestinoSearch}
+                      placeholder="¿A dónde vas?"
+                      placeholderTextColor="rgba(255,255,255,0.4)"
+                    />
+                  </View>
+                </View>
+
+                {/* Llegada */}
+                <View style={s.spFieldDate}>
+                  <Text style={s.spLabel}>Llegada</Text>
+                  <TouchableOpacity style={s.spInputWrap} onPress={() => setShowLlegadaSearchPicker(true)}>
+                    <Text style={s.spInputText}>{formatDisplayDate(llegadaSearch)}</Text>
+                    <Ionicons name="chevron-down" size={14} color="rgba(255,255,255,0.6)" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Salida */}
+                <View style={s.spFieldDate}>
+                  <Text style={s.spLabel}>Salida</Text>
+                  <TouchableOpacity style={s.spInputWrap} onPress={() => setShowSalidaSearchPicker(true)}>
+                    <Text style={s.spInputText}>{formatDisplayDate(salidaSearch)}</Text>
+                    <Ionicons name="chevron-down" size={14} color="rgba(255,255,255,0.6)" />
+                  </TouchableOpacity>
+                </View>
+
               </View>
-              <View style={s.sbSep} />
-              <View style={s.sbField}>
-                <Text style={s.sbLabel}>Llegada</Text>
-                <Text style={s.sbValue}>{params.llegada || '—'}</Text>
+
+              {/* Horizontal Divider */}
+              <View style={s.spDivider} />
+
+              {/* Row 2: Habitaciones + Adultos + Niños + Buscar */}
+              <View style={[s.spRow, isWide && s.spRowWide, { alignItems: 'flex-end' }]}>
+                
+                {/* Habitaciones */}
+                <View style={s.spFieldNum}>
+                  <Text style={s.spLabel}>Habitaciones</Text>
+                  <View style={s.spInputWrap}>
+                    <Ionicons name="bed" size={15} color="rgba(255,255,255,0.6)" style={s.spIcon} />
+                    <TextInput
+                      style={s.spInput}
+                      value={habitacionesSearch}
+                      onChangeText={setHabitacionesSearch}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </View>
+
+                {/* Adultos */}
+                <View style={s.spFieldNum}>
+                  <Text style={s.spLabel}>Adultos</Text>
+                  <View style={s.spInputWrap}>
+                    <Ionicons name="person" size={14} color="rgba(255,255,255,0.6)" style={s.spIcon} />
+                    <TextInput
+                      style={s.spInput}
+                      value={adultosSearch}
+                      onChangeText={setAdultosSearch}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </View>
+
+                {/* Niños */}
+                <View style={s.spFieldNum}>
+                  <Text style={s.spLabel}>Niños</Text>
+                  <View style={s.spInputWrap}>
+                    <Ionicons name="happy" size={14} color="rgba(255,255,255,0.6)" style={s.spIcon} />
+                    <TextInput
+                      style={s.spInput}
+                      value={ninosSearch}
+                      onChangeText={setNinosSearch}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </View>
+
+                {/* Buscar button */}
+                <TouchableOpacity style={s.spBtn} onPress={executeNewSearch} activeOpacity={0.85}>
+                  <Ionicons name="search" size={16} color="#fff" />
+                  <Text style={s.spBtnText}>Buscar</Text>
+                </TouchableOpacity>
+
               </View>
-              <View style={s.sbSep} />
-              <View style={s.sbField}>
-                <Text style={s.sbLabel}>Salida</Text>
-                <Text style={s.sbValue}>{params.salida || '—'}</Text>
-              </View>
-              <TouchableOpacity style={s.sbBtn} onPress={() => router.back()} activeOpacity={0.85}>
-                <Ionicons name="search" size={16} color="#fff" />
-                <Text style={s.sbBtnText}>Modificar</Text>
-              </TouchableOpacity>
             </View>
+
           </View>
         </View>
 
         {/* Results bar */}
-        <View style={s.resultsBar}>
+        <View style={[s.resultsBar, { flexDirection: isWide ? 'row' : 'column', alignItems: isWide ? 'center' : 'stretch' }]}>
           <View style={{ flex: 1, alignSelf: 'stretch', justifyContent: 'center' }}>
             <Text style={s.resultsCount}>
               <Text style={{ fontWeight: '700' }}>{filtered.length} alojamiento{filtered.length !== 1 ? 's' : ''}</Text>
@@ -302,7 +429,7 @@ export default function LodgingResultsScreen() {
           </ScrollView>
 
           {/* Mobile Filter Toggle */}
-          {Platform.OS !== 'web' && (
+          {!isWide && (
             <TouchableOpacity style={s.mobileFilterBtn} onPress={() => setShowMobileFilters(true)}>
               <Ionicons name="options-outline" size={16} color="#fff" />
               <Text style={s.mobileFilterBtnText}>Filtros ({activeTags.length})</Text>
@@ -330,9 +457,9 @@ export default function LodgingResultsScreen() {
         )}
 
         {/* Body: Sidebar + Results */}
-        <View style={s.pageBody}>
-          {/* Sidebar (Web Only) */}
-          {Platform.OS === 'web' && (
+        <View style={[s.pageBody, { flexDirection: isWide ? 'row' : 'column' }]}>
+          {/* Sidebar (Wide Screen Only) */}
+          {isWide && (
             <View style={s.sidebar}>
               {renderFiltersContent()}
             </View>
@@ -356,7 +483,7 @@ export default function LodgingResultsScreen() {
               </View>
             ) : (
               <>
-                {paged.map(h => <HotelCard key={`${h.provider}-${h.id}`} h={h} onPress={() => goDetail(h)} />)}
+                {paged.map(h => <HotelCard key={`${h.provider}-${h.id}`} h={h} onPress={() => goDetail(h)} isWide={isWide} />)}
 
                 {totalPages > 1 && (
                   <View style={s.pagination}>
@@ -374,10 +501,28 @@ export default function LodgingResultsScreen() {
               </>
             )}
           </View>
+          </View>
         </View>
 
         <Footer />
       </ScrollView>
+
+      {/* Arrival Picker */}
+      <CalendarModal
+        visible={showLlegadaSearchPicker}
+        value={llegadaSearch}
+        onSelect={setLlegadaSearch}
+        onClose={() => setShowLlegadaSearchPicker(false)}
+      />
+
+      {/* Departure Picker */}
+      <CalendarModal
+        visible={showSalidaSearchPicker}
+        value={salidaSearch}
+        minDate={llegadaSearch || undefined}
+        onSelect={setSalidaSearch}
+        onClose={() => setShowSalidaSearchPicker(false)}
+      />
 
       {/* Mobile Filters Modal */}
       <Modal visible={showMobileFilters} animationType="slide" transparent={false} onRequestClose={() => setShowMobileFilters(false)}>
@@ -435,42 +580,65 @@ function PagBtn({ icon, onPress, disabled }: { icon: any; onPress: () => void; d
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.bg },
-  scroll: { flexGrow: 1 },
+  scroll: { flexGrow: 1, backgroundColor: Colors.bg },
+  mainContent: { flex: 1, width: '100%' },
 
   heroBanner: {
-    backgroundColor: Colors.extra1,
-    paddingTop: Spacing.xl + 24,
+    paddingTop: Spacing.xl + 28,
     paddingBottom: Spacing.xl,
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.md,
     position: 'relative',
-    minHeight: Platform.OS === 'web' ? 200 : 160,
-    justifyContent: 'flex-end',
+    minHeight: 250,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+    alignSelf: 'stretch',
+    overflow: 'hidden',
   },
   heroOverlay: {
     position: 'absolute',
-    inset: 0,
-    backgroundColor: 'rgba(70,64,60,0.88)',
-  } as any,
-  heroContainer: { gap: Spacing.md },
-  heroTitle: { fontSize: Platform.OS === 'web' ? 32 : 22, fontWeight: '700', color: '#fff', textAlign: 'center' },
-  searchBarCompact: {
-    flexDirection: Platform.OS === 'web' ? 'row' : 'column',
-    backgroundColor: Colors.surface,
+    left: 0, right: 0, top: 0, bottom: 0,
+    backgroundColor: 'rgba(55, 34, 31, 0.72)', // Tinted overlay (terracotta palette)
+  },
+  heroContainer: { gap: Spacing.md, width: '100%', maxWidth: 960 },
+  heroTitle: { fontSize: 28, fontWeight: '700', color: '#fff', textAlign: 'center', fontFamily: 'PlayfairDisplay-Bold', textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 8 },
+
+  // Interactive Search Panel (Styled like mockup)
+  searchPanel: {
+    backgroundColor: 'rgba(70, 60, 56, 0.78)',
     borderRadius: BorderRadius.lg,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: Platform.OS === 'web' ? 'center' : 'stretch',
+    padding: Spacing.md,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.15)',
+    width: '100%',
+    gap: 12,
+    marginTop: 8,
+    ...Shadow.md,
+    ...Platform.select({ web: { backdropFilter: 'blur(10px)' } as any }),
   },
-  sbField: { flex: 1, paddingVertical: 12, paddingHorizontal: Spacing.md },
-  sbLabel: { fontSize: 10, fontWeight: '600', textTransform: 'uppercase', color: Colors.subtitulo, letterSpacing: 0.5 },
-  sbValue: { fontSize: 14, fontWeight: '600', color: Colors.extra1, marginTop: 2 },
-  sbSep: { width: 1, backgroundColor: Colors.border },
-  sbBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: Spacing.xs,
-    backgroundColor: Colors.titulo, paddingVertical: 14, paddingHorizontal: Spacing.lg,
+  spRow: { gap: 10, width: '100%' },
+  spRowWide: { flexDirection: 'row' },
+  spFieldDestino: { flex: 2, minWidth: 200 },
+  spFieldDate: { flex: 1.2, minWidth: 130 },
+  spFieldNum: { flex: 1, minWidth: 90 },
+  spLabel: { fontSize: 9, fontWeight: '700', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)', letterSpacing: 0.8, marginBottom: 5, paddingLeft: 2 },
+  spInputWrap: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.22)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 8, paddingHorizontal: 10,
+    height: 40,
   },
-  sbBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  spIcon: { marginRight: 6 },
+  spInput: { flex: 1, color: '#fff', fontSize: 13, paddingVertical: 0, height: '100%' },
+  spInputText: { flex: 1, color: '#fff', fontSize: 13 },
+  spDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.12)', marginVertical: 4 },
+  spBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    backgroundColor: '#8E5A54', borderRadius: 8,
+    height: 40, paddingHorizontal: Spacing.xl, alignSelf: 'stretch',
+  },
+  spBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 
   resultsBar: {
     flexDirection: Platform.OS === 'web' ? 'row' : 'column',
@@ -480,6 +648,7 @@ const s = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
     gap: Spacing.sm,
+    backgroundColor: Colors.bg,
   },
   resultsCount: { fontSize: 14, color: Colors.subtitulo },
   sortChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: BorderRadius.full, borderWidth: 1, borderColor: Colors.border, marginRight: 6, backgroundColor: Colors.surface },
@@ -503,7 +672,7 @@ const s = StyleSheet.create({
   clearTagsBtn: { paddingHorizontal: 6 },
   clearTagsBtnText: { fontSize: 11, color: Colors.titulo, fontWeight: '700', textDecorationLine: 'underline' },
 
-  pageBody: { flexDirection: Platform.OS === 'web' ? 'row' : 'column', alignItems: 'flex-start' },
+  pageBody: { flexDirection: Platform.OS === 'web' ? 'row' : 'column', alignItems: 'flex-start', backgroundColor: Colors.bg, width: '100%' },
   sidebar: { width: 260, padding: Spacing.lg, borderRightWidth: 1, borderRightColor: Colors.border },
   priceInputRow: { flexDirection: 'row', gap: Spacing.sm, marginTop: 8 },
   priceInputWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: Colors.accentBorder, borderRadius: BorderRadius.sm, paddingHorizontal: 8, paddingVertical: 6 },
