@@ -4,6 +4,14 @@ import {
   TouchableOpacity, useWindowDimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+
+// Safely extract a string label from a field that may come as a plain string or {nombre, ...} object
+function fieldLabel(v: any, fallback = ''): string {
+  if (v === null || v === undefined) return fallback;
+  if (typeof v === 'string') return v || fallback;
+  if (typeof v === 'object') return v.nombre ?? v.label ?? fallback;
+  return String(v) || fallback;
+}
 import { Ionicons } from '@expo/vector-icons';
 import Navbar from '../../../components/Navbar';
 import Footer from '../../../components/Footer';
@@ -29,12 +37,12 @@ interface CategoryItem {
 interface VehicleItem {
   idVehiculo: number;
   codigoInterno: string;
-  marca: string;
+  marca: string | { idMarca: number; nombre: string };
   modelo: string;
   anio: number;
   color: string;
-  combustible: string;
-  transmision: string;
+  combustible: string | { nombre?: string };
+  transmision: string | { nombre?: string };
   capacidadPasajeros: number;
   capacidadMaletas: number;
   numeroPuertas: number;
@@ -42,9 +50,11 @@ interface VehicleItem {
   imagenUrl: string;
   provider: string;
   localizacion?: LocationItem;
-  categoria?: CategoryItem;
+  categoria?: CategoryItem | string;
   disponibilidad?: {
     cantidadDias: number;
+    fechaRecogida?: string;
+    fechaDevolucion?: string;
   };
   precio?: {
     precioBaseDia: number;
@@ -56,7 +66,12 @@ interface VehicleItem {
 
 export default function CarDetailScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, fechaRecogida, fechaDevolucion, precioDia } = useLocalSearchParams<{
+    id: string;
+    fechaRecogida?: string;
+    fechaDevolucion?: string;
+    precioDia?: string;
+  }>();
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
 
@@ -108,17 +123,36 @@ export default function CarDetailScreen() {
 
   const specs = useMemo(() => {
     if (!vehiculo) return [];
+    const transmisionStr = fieldLabel(vehiculo.transmision, 'MANUAL');
+    const combustibleStr = fieldLabel(vehiculo.combustible, 'Gasolina');
     return [
       { icon: 'people-outline', label: 'Pasajeros', value: `${vehiculo.capacidadPasajeros} personas` },
       { icon: 'briefcase-outline', label: 'Maletas', value: `${vehiculo.capacidadMaletas} maletas` },
       { icon: 'key-outline', label: 'Puertas', value: `${vehiculo.numeroPuertas || 4} puertas` },
-      { icon: 'settings-outline', label: 'Transmisión', value: vehiculo.transmision === 'AUTOMATICA' ? 'Automática' : 'Manual' },
-      { icon: 'funnel-outline', label: 'Combustible', value: vehiculo.combustible ? (vehiculo.combustible.charAt(0) + vehiculo.combustible.slice(1).toLowerCase()) : 'Gasolina' },
+      { icon: 'settings-outline', label: 'Transmisión', value: transmisionStr.toUpperCase() === 'AUTOMATICA' ? 'Automática' : 'Manual' },
+      { icon: 'funnel-outline', label: 'Combustible', value: combustibleStr ? (combustibleStr.charAt(0).toUpperCase() + combustibleStr.slice(1).toLowerCase()) : 'Gasolina' },
       { icon: 'snow-outline', label: 'Aire acond.', value: vehiculo.aireAcondicionado ? 'Sí' : 'No' },
       { icon: 'color-palette-outline', label: 'Color', value: vehiculo.color || 'Plata' },
       { icon: 'calendar-outline', label: 'Año', value: `${vehiculo.anio}` },
     ];
   }, [vehiculo]);
+
+  // Price & days — calculated from passed params when backend doesn't return them
+  const diasEstimados = useMemo(() => {
+    if (vehiculo?.disponibilidad?.cantidadDias) return vehiculo.disponibilidad.cantidadDias;
+    const r = fechaRecogida || vehiculo?.disponibilidad?.fechaRecogida;
+    const d = fechaDevolucion || vehiculo?.disponibilidad?.fechaDevolucion;
+    if (r && d) {
+      const diff = Math.ceil((new Date(d).getTime() - new Date(r).getTime()) / 86400000);
+      return Math.max(1, diff);
+    }
+    return 1;
+  }, [vehiculo, fechaRecogida, fechaDevolucion]);
+
+  const precioDiaVal = vehiculo?.precio?.precioBaseDia ?? (precioDia ? parseFloat(precioDia) : 0);
+  const subtotalVal = vehiculo?.precio?.subtotalVehiculo ?? (precioDiaVal * diasEstimados);
+  const ivaVal = vehiculo?.precio?.iva ?? (subtotalVal * 0.15);
+  const totalVal = vehiculo?.precio?.total ?? (subtotalVal + ivaVal);
 
   if (loading) {
     return (
@@ -170,17 +204,17 @@ export default function CarDetailScreen() {
                 <Ionicons name="arrow-back" size={16} color="#fff" />
                 <Text style={s.heroBackText}>Volver</Text>
               </TouchableOpacity>
-              <Text style={s.breadcrumbText}>Autos  /  {vehiculo.categoria?.nombre || 'General'}  /  {vehiculo.marca} {vehiculo.modelo}</Text>
+              <Text style={s.breadcrumbText}>Autos  /  {fieldLabel(vehiculo.categoria, 'General')}  /  {fieldLabel(vehiculo.marca)} {vehiculo.modelo}</Text>
             </View>
 
             {/* Title / Badges */}
             <View style={s.heroInfo}>
               <View style={s.badges}>
-                <View style={s.badge}><Text style={s.badgeText}>{vehiculo.categoria?.nombre || 'General'}</Text></View>
-                <View style={s.badge}><Text style={s.badgeText}>{vehiculo.transmision === 'AUTOMATICA' ? 'Automática' : 'Manual'}</Text></View>
-                <View style={s.badge}><Text style={s.badgeText}>{vehiculo.combustible}</Text></View>
+                <View style={s.badge}><Text style={s.badgeText}>{fieldLabel(vehiculo.categoria, 'General')}</Text></View>
+                <View style={s.badge}><Text style={s.badgeText}>{fieldLabel(vehiculo.transmision, 'MANUAL').toUpperCase() === 'AUTOMATICA' ? 'Automática' : 'Manual'}</Text></View>
+                <View style={s.badge}><Text style={s.badgeText}>{fieldLabel(vehiculo.combustible, 'Gasolina')}</Text></View>
               </View>
-              <Text style={s.carTitle}>{vehiculo.marca} <Text style={s.carModel}>{vehiculo.modelo}</Text></Text>
+              <Text style={s.carTitle}>{fieldLabel(vehiculo.marca)} <Text style={s.carModel}>{vehiculo.modelo}</Text></Text>
               <Text style={s.carSub}>{vehiculo.anio} · {vehiculo.color}</Text>
             </View>
           </View>
@@ -284,24 +318,24 @@ export default function CarDetailScreen() {
               <View style={s.breakdown}>
                 <View style={s.breakdownRow}>
                   <Text style={s.breakdownLabel}>Precio por día</Text>
-                  <Text style={s.breakdownValue}>${(vehiculo.precio?.precioBaseDia ?? 0).toFixed(2)}</Text>
+                  <Text style={s.breakdownValue}>${precioDiaVal.toFixed(2)}</Text>
                 </View>
                 <View style={s.breakdownRow}>
                   <Text style={s.breakdownLabel}>Días estimados</Text>
-                  <Text style={s.breakdownValue}>{vehiculo.disponibilidad?.cantidadDias || 1}</Text>
+                  <Text style={s.breakdownValue}>{diasEstimados}</Text>
                 </View>
                 <View style={s.breakdownRow}>
                   <Text style={s.breakdownLabel}>Subtotal vehículo</Text>
-                  <Text style={s.breakdownValue}>${(vehiculo.precio?.subtotalVehiculo ?? (vehiculo.precio?.precioBaseDia || 0)).toFixed(2)}</Text>
+                  <Text style={s.breakdownValue}>${subtotalVal.toFixed(2)}</Text>
                 </View>
                 <View style={[s.breakdownRow, s.breakdownIva]}>
                   <Text style={s.breakdownLabel}>IVA (15%)</Text>
-                  <Text style={s.breakdownValue}>${(vehiculo.precio?.iva ?? 0).toFixed(2)}</Text>
+                  <Text style={s.breakdownValue}>${ivaVal.toFixed(2)}</Text>
                 </View>
                 <View style={s.stickyDivider} />
                 <View style={s.breakdownRow}>
                   <Text style={s.totalLabel}>Total estimado</Text>
-                  <Text style={s.totalValue}>${(vehiculo.precio?.total ?? (vehiculo.precio?.precioBaseDia || 0)).toFixed(2)}</Text>
+                  <Text style={s.totalValue}>${totalVal.toFixed(2)}</Text>
                 </View>
               </View>
 
