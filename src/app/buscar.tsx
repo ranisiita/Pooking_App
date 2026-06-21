@@ -12,6 +12,7 @@ import Footer from '../components/Footer';
 import CalendarModal from '../components/CalendarModal';
 import { Colors, Spacing, BorderRadius, Shadow } from '../constants/theme';
 import { FlightService } from '../services/flights.service';
+import { CarService } from '../services/cars.service';
 
 // On web, Expo serves the public/ folder as static files at the root URL.
 // On native, Metro bundles the image via require().
@@ -151,9 +152,15 @@ function DateField({ value, onChange, icon, hasError }: { value: string; onChang
 
 // ─── Select / Picker ─────────────────────────────────────────────────────────
 interface SelectOption { value: string; label: string; }
-interface SelectFieldProps { value: string; onChange: (v: string) => void; options: SelectOption[]; icon?: React.ComponentProps<typeof MaterialIcons>['name']; }
+interface SelectFieldProps {
+  value: string;
+  onChange: (v: string) => void;
+  options: SelectOption[];
+  icon?: React.ComponentProps<typeof MaterialIcons>['name'];
+  disabled?: boolean;
+}
 
-function SelectField({ value, onChange, options, icon }: SelectFieldProps) {
+function SelectField({ value, onChange, options, icon, disabled = false }: SelectFieldProps) {
   const [open, setOpen] = useState(false);
   const selectedLabel = options.find(o => o.value === value)?.label ?? options[0]?.label;
 
@@ -165,6 +172,7 @@ function SelectField({ value, onChange, options, icon }: SelectFieldProps) {
         <select
           value={value}
           onChange={(e: any) => onChange(e.target.value)}
+          disabled={disabled}
           style={{ flex: 1, border: 'none', background: 'transparent', fontSize: 13, color: Colors.extra1, outline: 'none', fontFamily: 'Poppins-Regular, sans-serif', cursor: 'pointer' } as any}
         >
           {options.map(o => (
@@ -178,7 +186,12 @@ function SelectField({ value, onChange, options, icon }: SelectFieldProps) {
 
   return (
     <>
-      <TouchableOpacity style={a.inputWrap} onPress={() => setOpen(true)} activeOpacity={0.8}>
+      <TouchableOpacity
+        style={[a.inputWrap, disabled && { opacity: 0.65 }]}
+        onPress={() => setOpen(true)}
+        activeOpacity={0.8}
+        disabled={disabled}
+      >
         {icon && <MaterialIcons name={icon} size={18} color={Colors.titulo} style={a.inputIcon} />}
         <Text style={[a.input, { paddingVertical: 0 }]}>{selectedLabel}</Text>
         <MaterialIcons name="keyboard-arrow-down" size={18} color={Colors.subtitulo} />
@@ -288,8 +301,18 @@ export default function SearchScreen() {
   const [vueloErr, setVueloErr] = useState<Record<string, string>>({});
   const [vueloFormErr, setVueloFormErr] = useState('');
 
-  const [coches, setCoches] = useState({ proveedor: '', recogida: hoy, devolucion: manana, categoria: '', transmision: '', marca: '', sort: '' });
+  const [coches, setCoches] = useState({
+    proveedor: '',
+    idLocalizacion: null as number | null,
+    recogida: hoy,
+    devolucion: manana,
+    categoria: '',
+    transmision: '',
+    marca: '',
+    sort: '',
+  });
   const [cocheErr, setCocheErr] = useState<Record<string, string>>({});
+  const [localizacionesCoches, setLocalizacionesCoches] = useState<Array<{ idLocalizacion: number; nombre: string }>>([]);
 
   const [atrac, setAtrac] = useState({ proveedor: 'todos', destino: '', fecha: hoy });
 
@@ -336,6 +359,32 @@ export default function SearchScreen() {
     if (t && TABS.some(tab => tab.key === t)) setActiveTab(t);
   }, [params.tab]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCarLocations() {
+      if (!coches.proveedor) {
+        setLocalizacionesCoches([]);
+        return;
+      }
+
+      try {
+        const localizaciones = await CarService.getLocalizaciones(coches.proveedor);
+        if (!cancelled) setLocalizacionesCoches(localizaciones ?? []);
+      } catch (err) {
+        if (!cancelled) {
+          setLocalizacionesCoches([]);
+          console.warn('Error loading car locations:', err);
+        }
+      }
+    }
+
+    loadCarLocations();
+    return () => {
+      cancelled = true;
+    };
+  }, [coches.proveedor]);
+
   // ── Validations ──────────────────────────────────────────────────────────
   const validateAloj = () => {
     const e: Record<string, string> = {};
@@ -361,6 +410,8 @@ export default function SearchScreen() {
 
   const validateCoches = () => {
     const e: Record<string, string> = {};
+    if (!coches.proveedor) e.proveedor = 'Selecciona un proveedor.';
+    if (!coches.idLocalizacion) e.idLocalizacion = 'Selecciona una sucursal de recogida.';
     if (!coches.recogida) e.recogida = 'Selecciona una fecha de recogida.';
     if (!coches.devolucion) e.devolucion = 'Selecciona una fecha de devolución.';
     else if (coches.devolucion < coches.recogida) e.devolucion = 'La devolución no puede ser antes de la recogida.';
@@ -381,12 +432,37 @@ export default function SearchScreen() {
 
   const buscarCoches = () => {
     if (!validateCoches()) return;
-    router.push({ pathname: '/autos/resultados' as any, params: { fechaRecogida: coches.recogida, fechaDevolucion: coches.devolucion, proveedor: coches.proveedor, categoria: coches.categoria, transmision: coches.transmision, marca: coches.marca, sort: coches.sort } });
+    router.push({
+      pathname: '/autos/resultados' as any,
+      params: {
+        fechaRecogida: coches.recogida,
+        fechaDevolucion: coches.devolucion,
+        proveedor: coches.proveedor,
+        idLocalizacionRecogida: String(coches.idLocalizacion),
+        categoria: coches.categoria,
+        transmision: coches.transmision,
+        marca: coches.marca,
+        sort: coches.sort,
+      },
+    });
   };
 
   const buscarAtracciones = () => {
     router.push({ pathname: '/atracciones' as any, params: { proveedor: atrac.proveedor, ciudad: atrac.destino.trim(), fecha: atrac.fecha } });
   };
+
+  const carLocationOptions: SelectOption[] = [
+    {
+      value: '',
+      label: coches.proveedor
+        ? 'Selecciona una sucursal'
+        : 'Selecciona un proveedor primero',
+    },
+    ...localizacionesCoches.map(localizacion => ({
+      value: String(localizacion.idLocalizacion),
+      label: localizacion.nombre,
+    })),
+  ];
 
   // ── Row helper (Stacks on mobile, row on desktop) ─────────────────────────
   const Row = ({ children }: { children: React.ReactNode }) => (
@@ -787,7 +863,31 @@ export default function SearchScreen() {
               <View style={s.formGrid}>
                 <View>
                   <FieldLabel>Proveedor</FieldLabel>
-                  <SelectField value={coches.proveedor} onChange={(v) => setCoches({ ...coches, proveedor: v })} options={CAR_PROVIDERS} icon="cloud" />
+                  <SelectField
+                    value={coches.proveedor}
+                    onChange={(proveedor) => {
+                      setLocalizacionesCoches([]);
+                      setCoches(c => ({ ...c, proveedor, idLocalizacion: null }));
+                    }}
+                    options={CAR_PROVIDERS}
+                    icon="cloud"
+                  />
+                  <FieldError msg={cocheErr.proveedor} />
+                </View>
+
+                <View>
+                  <FieldLabel>Sucursal de Recogida</FieldLabel>
+                  <SelectField
+                    value={coches.idLocalizacion ? String(coches.idLocalizacion) : ''}
+                    onChange={(idLocalizacion) => setCoches(c => ({
+                      ...c,
+                      idLocalizacion: idLocalizacion ? Number(idLocalizacion) : null,
+                    }))}
+                    options={carLocationOptions}
+                    icon="location-on"
+                    disabled={!coches.proveedor}
+                  />
+                  <FieldError msg={cocheErr.idLocalizacion} />
                 </View>
 
                 {/* Fechas - Stacked on Mobile, Row on Desktop */}

@@ -1,18 +1,20 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, Image, ActivityIndicator, Platform, Dimensions,
+  ScrollView, Image, ActivityIndicator, Modal, Pressable,
+  ImageBackground, useWindowDimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import Navbar from '../../components/Navbar';
 import Footer from '../../components/Footer';
+import CalendarModal from '../../components/CalendarModal';
 import { CarService, CriteriosBusquedaAutos } from '../../services/cars.service';
 import { Colors, Spacing, BorderRadius, Shadow } from '../../constants/theme';
 import { setStorageItem } from '../../services/storage';
 
 const ITEMS_PER_PAGE = 6;
-const { width } = Dimensions.get('window');
 
 interface LocationItem {
   idLocalizacion: number;
@@ -44,8 +46,131 @@ interface VehicleItem {
   };
 }
 
+const TRANSMISION_OPTIONS = [
+  { label: 'Cualquiera', value: '' },
+  { label: 'Automática', value: 'AUTOMATICA' },
+  { label: 'Manual', value: 'MANUAL' },
+];
+
+const SORT_OPTIONS = [
+  { label: 'Relevancia', value: '' },
+  { label: 'Precio: Menor a Mayor', value: 'price_asc' },
+  { label: 'Precio: Mayor a Menor', value: 'price_desc' },
+];
+
+const PROVIDER_OPTIONS = [
+  { label: 'Todos', value: 'todos' },
+  { label: 'RedCar', value: 'martin' },
+  { label: 'BudgetCar', value: 'ana' },
+  { label: 'Europcar', value: 'dylan' },
+  { label: 'Rentix', value: 'kath' },
+];
+
+type PickerKey = 'recogida' | 'devolucion' | 'categoria' | 'transmision' | 'sort';
+
+interface PickerOption { label: string; value: string | number; }
+
+function BottomSheet({
+  visible,
+  title,
+  options,
+  activeValue,
+  onSelect,
+  onClose,
+}: {
+  visible: boolean;
+  title: string;
+  options: PickerOption[];
+  activeValue: string | number | null | undefined;
+  onSelect: (v: any) => void;
+  onClose: () => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={bs.overlay} onPress={onClose}>
+        <View style={bs.sheet}>
+          <View style={bs.handle} />
+          <Text style={bs.title}>{title}</Text>
+          <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+            {options.map((opt, idx) => {
+              const isActive = String(opt.value) === String(activeValue ?? '');
+              return (
+                <TouchableOpacity
+                  key={idx}
+                  style={[bs.item, isActive && bs.itemActive]}
+                  onPress={() => { onSelect(opt.value); onClose(); }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[bs.itemText, isActive && bs.itemTextActive]}>{opt.label}</Text>
+                  {isActive && <Ionicons name="checkmark" size={18} color={Colors.titulo} />}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      </Pressable>
+    </Modal>
+  );
+}
+
+function SelectPicker({
+  label,
+  icon,
+  displayValue,
+  placeholder = 'Seleccionar',
+  disabled = false,
+  style,
+  onPress,
+}: {
+  label: string;
+  icon: string;
+  displayValue?: string;
+  placeholder?: string;
+  disabled?: boolean;
+  style?: any;
+  onPress: () => void;
+}) {
+  return (
+    <View style={[s.fieldFull, style]}>
+      <Text style={s.label}>{label}</Text>
+      <TouchableOpacity
+        style={[s.pickerTrigger, disabled && { opacity: 0.55 }]}
+        onPress={onPress}
+        activeOpacity={0.8}
+        disabled={disabled}
+      >
+        <Ionicons name={icon as any} size={16} color={Colors.extra2} />
+        <Text style={s.pickerTriggerText} numberOfLines={1}>{displayValue || placeholder}</Text>
+        <Ionicons name="chevron-down" size={14} color={Colors.subtitulo} />
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+function CarImage({ uri, style }: { uri?: string; style: any }) {
+  const [error, setError] = useState(false);
+  if (!uri || error) {
+    return (
+      <View style={[style, { alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.bg }]}>
+        <Ionicons name="car-outline" size={40} color={Colors.extra2} />
+      </View>
+    );
+  }
+  return (
+    <Image
+      source={{ uri }}
+      style={style}
+      resizeMode="cover"
+      onError={() => setError(true)}
+    />
+  );
+}
+
 export default function CarResultsScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isWide = width >= 768;
+
   const params = useLocalSearchParams<{
     fechaRecogida?: string;
     fechaDevolucion?: string;
@@ -58,11 +183,13 @@ export default function CarResultsScreen() {
     sort?: string;
   }>();
 
+  const today = new Date().toISOString().split('T')[0];
+
   // Filter lists from API
   const [localizaciones, setLocalizaciones] = useState<LocationItem[]>([]);
   const [categorias, setCategorias] = useState<CategoryItem[]>([]);
 
-  // Search Criterias
+  // Search criteria
   const [criterios, setCriterios] = useState<CriteriosBusquedaAutos>({
     idLocalizacionRecogida: params.idLocalizacionRecogida ? +params.idLocalizacionRecogida : null,
     idLocalizacionDevolucion: params.idLocalizacionDevolucion ? +params.idLocalizacionDevolucion : null,
@@ -79,6 +206,13 @@ export default function CarResultsScreen() {
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
 
+  // Calendar open states
+  const [showCalRecogida, setShowCalRecogida] = useState(false);
+  const [showCalDevolucion, setShowCalDevolucion] = useState(false);
+
+  // Picker open state (null = closed, key string = which picker is open)
+  const [openPicker, setOpenPicker] = useState<PickerKey | null>(null);
+
   useEffect(() => {
     async function loadFilters() {
       try {
@@ -87,13 +221,13 @@ export default function CarResultsScreen() {
         const cats = await CarService.getCategorias(prov);
         setLocalizaciones(locs);
         setCategorias(cats);
-        
-        // If no pick-up location is selected, default to the first one available
         if (!criterios.idLocalizacionRecogida && locs.length > 0) {
-          setCriterios(c => ({
-            ...c,
-            idLocalizacionRecogida: locs[0].idLocalizacion
-          }));
+          const autoId = locs[0].idLocalizacion;
+          // Functional update avoids overwriting a selection the user made while
+          // localizaciones were still loading (race condition guard)
+          setCriterios(c => c.idLocalizacionRecogida ? c : { ...c, idLocalizacionRecogida: autoId });
+          // Re-trigger search now that we have a valid localizacion
+          buscarResultados(autoId);
         }
       } catch (err) {
         console.warn('Error loading filters data', err);
@@ -116,11 +250,14 @@ export default function CarResultsScreen() {
     params.sort,
   ]);
 
-  const buscarResultados = async () => {
+  // idLocRecogidaOverride lets callers bypass stale criterios/params state
+  const buscarResultados = async (idLocRecogidaOverride?: number) => {
     setLoading(true);
     try {
       const searchParams: CriteriosBusquedaAutos = {
-        idLocalizacionRecogida: params.idLocalizacionRecogida ? +params.idLocalizacionRecogida : criterios.idLocalizacionRecogida,
+        idLocalizacionRecogida: idLocRecogidaOverride !== undefined
+          ? idLocRecogidaOverride
+          : (params.idLocalizacionRecogida ? +params.idLocalizacionRecogida : criterios.idLocalizacionRecogida),
         idLocalizacionDevolucion: params.idLocalizacionDevolucion ? +params.idLocalizacionDevolucion : criterios.idLocalizacionDevolucion,
         fechaRecogida: params.fechaRecogida || criterios.fechaRecogida,
         fechaDevolucion: params.fechaDevolucion || criterios.fechaDevolucion,
@@ -132,14 +269,12 @@ export default function CarResultsScreen() {
       };
 
       const results = await CarService.buscarVehiculos(searchParams, 1, 100);
-      
-      // Perform parallel availability checks for each vehicle returned
+
       const checked = await Promise.all(
         results.map(async (v) => {
           const rec = searchParams.fechaRecogida || v.disponibilidad?.fechaRecogida || '';
           const dev = searchParams.fechaDevolucion || v.disponibilidad?.fechaDevolucion || '';
           const idLocRec = v.localizacion?.idLocalizacion ?? searchParams.idLocalizacionRecogida ?? 0;
-
           if (!v.provider) return { v, disponible: false };
           const disponible = await CarService.verificarDisponibilidad(v.idVehiculo, v.provider, rec, dev, idLocRec);
           return { v, disponible };
@@ -148,7 +283,6 @@ export default function CarResultsScreen() {
 
       const disponibles = checked.filter(c => c.disponible).map(c => c.v);
 
-      // Sort logic
       if (searchParams.sort === 'price_asc') {
         disponibles.sort((a, b) => (a.precio?.precioBaseDia ?? 0) - (b.precio?.precioBaseDia ?? 0));
       } else if (searchParams.sort === 'price_desc') {
@@ -177,33 +311,27 @@ export default function CarResultsScreen() {
     if (criterios.nombreMarca) routeParams.nombreMarca = criterios.nombreMarca;
     if (criterios.proveedor && criterios.proveedor !== 'todos') routeParams.proveedor = criterios.proveedor;
     if (criterios.sort) routeParams.sort = criterios.sort;
-
-    router.replace({
-      pathname: '/autos/resultados',
-      params: routeParams,
-    });
+    router.replace({ pathname: '/autos/resultados', params: routeParams });
   };
 
   const verDetalle = async (vehiculo: VehicleItem) => {
     await setStorageItem('car-selected', JSON.stringify(vehiculo));
-    if (vehiculo.provider) {
-      await setStorageItem('car-provider', vehiculo.provider);
-    }
+    if (vehiculo.provider) await setStorageItem('car-provider', vehiculo.provider);
     router.push({
       pathname: '/autos/detalle/[id]' as any,
-      params: { id: String(vehiculo.idVehiculo) }
+      params: {
+        id: String(vehiculo.idVehiculo),
+        fechaRecogida: criterios.fechaRecogida || '',
+        fechaDevolucion: criterios.fechaDevolucion || '',
+        precioDia: String(vehiculo.precio?.precioBaseDia ?? 0),
+      },
     });
   };
 
   const handleReservar = async (vehiculo: VehicleItem) => {
     await setStorageItem('car-selected', JSON.stringify(vehiculo));
-    if (vehiculo.provider) {
-      await setStorageItem('car-provider', vehiculo.provider);
-    }
-    router.push({
-      pathname: '/autos/checkout/[id]' as any,
-      params: { id: String(vehiculo.idVehiculo) }
-    });
+    if (vehiculo.provider) await setStorageItem('car-provider', vehiculo.provider);
+    router.push({ pathname: '/autos/checkout/[id]' as any, params: { id: String(vehiculo.idVehiculo) } });
   };
 
   const nombreLocalizacion = (id: number | null) => {
@@ -221,209 +349,144 @@ export default function CarResultsScreen() {
     return 'funnel-outline';
   };
 
+  const formatDisplayDate = (d: string) => {
+    if (!d) return 'Seleccionar';
+    const [y, m, day] = d.split('-');
+    return `${day}/${m}/${y}`;
+  };
+
+  const transmisionLabel = (v: string) =>
+    v === 'AUTOMATICA' ? 'Automática' : v === 'MANUAL' ? 'Manual' : 'Cualquiera';
+
+  const sortLabel = (v: string) =>
+    v === 'price_asc' ? 'Precio: Menor a Mayor' : v === 'price_desc' ? 'Precio: Mayor a Menor' : 'Relevancia';
+
+  const providerLabel = (v: string) =>
+    PROVIDER_OPTIONS.find(option => option.value === v)?.label ?? 'Todos';
+
+  // Build picker options
+  const locOptsRecogida: PickerOption[] = (localizaciones ?? []).map(l => ({
+    label: l.nombre,
+    value: l.idLocalizacion,
+  }));
+  const locOptsDevolucion: PickerOption[] = [
+    { label: 'Misma sucursal', value: 0 },
+    ...localizaciones.map(l => ({ label: l.nombre, value: l.idLocalizacion })),
+  ];
+  const catOpts: PickerOption[] = [
+    { label: 'Todas las categorías', value: '' },
+    ...categorias.map(c => ({ label: c.nombre, value: c.nombre })),
+  ];
+
   return (
     <View style={s.root}>
       <Navbar />
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-        {/* Search Panel floating header */}
-        <View style={s.searchBarFloating}>
-          <Text style={s.searchTitle}>Alquiler de Autos</Text>
-          <View style={s.formGrid}>
-            <View style={s.row}>
-              {/* Recogida */}
-              <View style={s.field}>
-                <Text style={s.label}>Lugar de Recogida</Text>
-                <View style={s.pickerWrap}>
-                  <Ionicons name="location-outline" size={16} color={Colors.extra2} />
-                  <TextInput
-                    style={s.textInp}
-                    placeholder="Sucursal"
-                    value={nombreLocalizacion(criterios.idLocalizacionRecogida ?? null)}
-                    editable={false}
-                  />
-                  {localizaciones.length > 0 && (
-                    <ScrollView style={s.dropdownScroll} nestedScrollEnabled>
-                      {localizaciones.map(l => (
-                        <TouchableOpacity
-                          key={l.idLocalizacion}
-                          style={s.dropdownItem}
-                          onPress={() => setCriterios(c => ({ ...c, idLocalizacionRecogida: l.idLocalizacion }))}
-                        >
-                          <Text style={s.dropdownText}>{l.nombre}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  )}
-                </View>
-              </View>
 
-              {/* Devolucion */}
-              <View style={s.field}>
-                <Text style={s.label}>Lugar de Devolución</Text>
-                <View style={s.pickerWrap}>
-                  <Ionicons name="location-outline" size={16} color={Colors.extra2} />
-                  <TextInput
-                    style={s.textInp}
-                    placeholder="Misma sucursal"
-                    value={nombreLocalizacion(criterios.idLocalizacionDevolucion ?? null)}
-                    editable={false}
-                  />
-                  {localizaciones.length > 0 && (
-                    <ScrollView style={s.dropdownScroll} nestedScrollEnabled>
-                      <TouchableOpacity
-                        style={s.dropdownItem}
-                        onPress={() => setCriterios(c => ({ ...c, idLocalizacionDevolucion: null }))}
-                      >
-                        <Text style={s.dropdownText}>Misma sucursal</Text>
-                      </TouchableOpacity>
-                      {localizaciones.map(l => (
-                        <TouchableOpacity
-                          key={l.idLocalizacion}
-                          style={s.dropdownItem}
-                          onPress={() => setCriterios(c => ({ ...c, idLocalizacionDevolucion: l.idLocalizacion }))}
-                        >
-                          <Text style={s.dropdownText}>{l.nombre}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  )}
-                </View>
-              </View>
-            </View>
-
-            <View style={s.row}>
-              {/* Recogida Date */}
-              <View style={s.field}>
-                <Text style={s.label}>Fecha Recogida</Text>
-                <View style={s.inputWrap}>
-                  <Ionicons name="calendar-outline" size={16} color={Colors.extra2} />
-                  <TextInput
-                    style={s.textInp}
-                    placeholder="YYYY-MM-DD"
-                    value={criterios.fechaRecogida}
-                    onChangeText={v => setCriterios(c => ({ ...c, fechaRecogida: v }))}
-                  />
-                </View>
-              </View>
-
-              {/* Devolucion Date */}
-              <View style={s.field}>
-                <Text style={s.label}>Fecha Devolución</Text>
-                <View style={s.inputWrap}>
-                  <Ionicons name="calendar-outline" size={16} color={Colors.extra2} />
-                  <TextInput
-                    style={s.textInp}
-                    placeholder="YYYY-MM-DD"
-                    value={criterios.fechaDevolucion}
-                    onChangeText={v => setCriterios(c => ({ ...c, fechaDevolucion: v }))}
-                  />
-                </View>
-              </View>
-            </View>
-
-            <View style={s.row}>
-              {/* Categoria */}
-              <View style={s.field}>
-                <Text style={s.label}>Categoría</Text>
-                <View style={s.pickerWrap}>
-                  <Ionicons name="apps-outline" size={16} color={Colors.extra2} />
-                  <TextInput
-                    style={s.textInp}
-                    placeholder="Todas las categorías"
-                    value={criterios.nombreCategoria}
-                    editable={false}
-                  />
-                  {categorias.length > 0 && (
-                    <ScrollView style={s.dropdownScroll} nestedScrollEnabled>
-                      <TouchableOpacity style={s.dropdownItem} onPress={() => setCriterios(c => ({ ...c, nombreCategoria: '' }))}>
-                        <Text style={s.dropdownText}>Todas las categorías</Text>
-                      </TouchableOpacity>
-                      {categorias.map(cat => (
-                        <TouchableOpacity
-                          key={cat.idCategoria}
-                          style={s.dropdownItem}
-                          onPress={() => setCriterios(c => ({ ...c, nombreCategoria: cat.nombre }))}
-                        >
-                          <Text style={s.dropdownText}>{cat.nombre}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  )}
-                </View>
-              </View>
-
-              {/* Marca */}
-              <View style={s.field}>
-                <Text style={s.label}>Marca</Text>
-                <View style={s.inputWrap}>
-                  <Ionicons name="car-outline" size={16} color={Colors.extra2} />
-                  <TextInput
-                    style={s.textInp}
-                    placeholder="Ej: Toyota"
-                    value={criterios.nombreMarca}
-                    onChangeText={v => setCriterios(c => ({ ...c, nombreMarca: v }))}
-                  />
-                </View>
-              </View>
-            </View>
-
-            <View style={s.row}>
-              {/* Transmision */}
-              <View style={s.field}>
-                <Text style={s.label}>Transmisión</Text>
-                <View style={s.pickerWrap}>
-                  <Ionicons name="settings-outline" size={16} color={Colors.extra2} />
-                  <TextInput
-                    style={s.textInp}
-                    placeholder="Cualquiera"
-                    value={criterios.transmision === 'AUTOMATICA' ? 'Automática' : criterios.transmision === 'MANUAL' ? 'Manual' : 'Cualquiera'}
-                    editable={false}
-                  />
-                  <ScrollView style={s.dropdownScroll} nestedScrollEnabled>
-                    <TouchableOpacity style={s.dropdownItem} onPress={() => setCriterios(c => ({ ...c, transmision: '' }))}>
-                      <Text style={s.dropdownText}>Cualquiera</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={s.dropdownItem} onPress={() => setCriterios(c => ({ ...c, transmision: 'AUTOMATICA' }))}>
-                      <Text style={s.dropdownText}>Automática</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={s.dropdownItem} onPress={() => setCriterios(c => ({ ...c, transmision: 'MANUAL' }))}>
-                      <Text style={s.dropdownText}>Manual</Text>
-                    </TouchableOpacity>
-                  </ScrollView>
-                </View>
-              </View>
-
-              {/* Ordenar */}
-              <View style={s.field}>
-                <Text style={s.label}>Ordenar por</Text>
-                <View style={s.pickerWrap}>
-                  <Ionicons name="filter-outline" size={16} color={Colors.extra2} />
-                  <TextInput
-                    style={s.textInp}
-                    placeholder="Relevancia"
-                    value={criterios.sort === 'price_asc' ? 'Precio: Menor a Mayor' : criterios.sort === 'price_desc' ? 'Precio: Mayor a Menor' : 'Relevancia'}
-                    editable={false}
-                  />
-                  <ScrollView style={s.dropdownScroll} nestedScrollEnabled>
-                    <TouchableOpacity style={s.dropdownItem} onPress={() => setCriterios(c => ({ ...c, sort: '' }))}>
-                      <Text style={s.dropdownText}>Relevancia</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={s.dropdownItem} onPress={() => setCriterios(c => ({ ...c, sort: 'price_asc' }))}>
-                      <Text style={s.dropdownText}>Precio: Menor a Mayor</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={s.dropdownItem} onPress={() => setCriterios(c => ({ ...c, sort: 'price_desc' }))}>
-                      <Text style={s.dropdownText}>Precio: Mayor a Menor</Text>
-                    </TouchableOpacity>
-                  </ScrollView>
-                </View>
-              </View>
-            </View>
-
-            <TouchableOpacity style={s.btnBuscar} onPress={handleBuscar}>
-              <Ionicons name="search" size={18} color="#fff" />
-              <Text style={s.btnBuscarText}>Buscar Vehículos</Text>
-            </TouchableOpacity>
+        {/* Hero — background image only */}
+        <ImageBackground
+          source={{ uri: 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=1600&q=80' }}
+          style={[s.heroBg, { height: isWide ? 220 : 180 }]}
+          resizeMode="cover"
+        >
+          <LinearGradient
+            colors={['rgba(70,64,60,0.7)', 'rgba(142,90,84,0.6)', 'rgba(198,177,125,0.4)']}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={s.categoryLabel}>
+            <Text style={s.categoryLabelText}>ALQUILER DE AUTOS</Text>
           </View>
+        </ImageBackground>
+
+        {/* Glass search panel — sits below hero, slightly overlapping */}
+        <View style={[s.searchBarFloating, isWide && { maxWidth: 860, alignSelf: 'center', width: '100%' }]}>
+          <Text style={s.panelTitle}>Encuentra tu auto ideal</Text>
+
+          {/* Lugar de Recogida */}
+          <SelectPicker
+            label="Lugar de Recogida"
+            icon="location-outline"
+            displayValue={nombreLocalizacion(criterios.idLocalizacionRecogida ?? null) || undefined}
+            placeholder="Selecciona sucursal"
+            disabled={locOptsRecogida.length === 0}
+            onPress={() => { if (locOptsRecogida.length > 0) setOpenPicker('recogida'); }}
+          />
+
+          {/* Lugar de Devolución */}
+          <SelectPicker
+            label="Lugar de Devolución"
+            icon="return-down-back-outline"
+            displayValue={criterios.idLocalizacionDevolucion
+              ? nombreLocalizacion(criterios.idLocalizacionDevolucion)
+              : undefined}
+            placeholder="Misma de recogida"
+            onPress={() => setOpenPicker('devolucion')}
+          />
+
+          {/* Fechas — always 2-column row */}
+          <View style={s.formRow}>
+            <View style={s.fieldRow}>
+              <Text style={s.label}>Fecha Recogida</Text>
+              <TouchableOpacity style={s.dateTrigger} onPress={() => setShowCalRecogida(true)} activeOpacity={0.8}>
+                <Ionicons name="calendar-outline" size={16} color={Colors.extra2} />
+                <Text style={s.dateTriggerText}>{formatDisplayDate(criterios.fechaRecogida || '')}</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={s.fieldRow}>
+              <Text style={s.label}>Fecha Devolución</Text>
+              <TouchableOpacity style={s.dateTrigger} onPress={() => setShowCalDevolucion(true)} activeOpacity={0.8}>
+                <Ionicons name="calendar-outline" size={16} color={Colors.extra2} />
+                <Text style={s.dateTriggerText}>{formatDisplayDate(criterios.fechaDevolucion || '')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Categoría */}
+          <SelectPicker
+            label="Categoría"
+            icon="apps-outline"
+            displayValue={criterios.nombreCategoria || undefined}
+            placeholder="Todas las categorías"
+            onPress={() => setOpenPicker('categoria')}
+          />
+
+          {/* Marca */}
+          <View style={s.fieldFull}>
+            <Text style={s.label}>Marca</Text>
+            <View style={s.inputWrap}>
+              <Ionicons name="car-outline" size={16} color={Colors.extra2} />
+              <TextInput
+                style={s.textInp}
+                placeholder="Ej: Toyota"
+                placeholderTextColor="rgba(96,98,86,0.5)"
+                value={criterios.nombreMarca}
+                onChangeText={v => setCriterios(c => ({ ...c, nombreMarca: v }))}
+              />
+            </View>
+          </View>
+
+          {/* Ordenar por + Transmisión — always 2-column row */}
+          <View style={s.formRow}>
+            <SelectPicker
+              label="Ordenar por"
+              icon="filter-outline"
+              displayValue={sortLabel(criterios.sort || '')}
+              style={s.fieldRow}
+              onPress={() => setOpenPicker('sort')}
+            />
+            <SelectPicker
+              label="Transmisión"
+              icon="settings-outline"
+              displayValue={transmisionLabel(criterios.transmision || '')}
+              style={s.fieldRow}
+              onPress={() => setOpenPicker('transmision')}
+            />
+          </View>
+
+          <TouchableOpacity style={s.btnBuscar} onPress={handleBuscar}>
+            <Ionicons name="search" size={18} color="#fff" />
+            <Text style={s.btnBuscarText}>Buscar autos</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Results Body */}
@@ -434,11 +497,10 @@ export default function CarResultsScreen() {
             </Text>
             {criterios.idLocalizacionRecogida ? (
               <Text style={s.resultsSubtitle}>
-                <Ionicons name="location-outline" size={14} color={Colors.extra2} />
-                {' '}{nombreLocalizacion(criterios.idLocalizacionRecogida)}
-                {criterios.idLocalizacionDevolucion && criterios.idLocalizacionDevolucion !== criterios.idLocalizacionRecogida ? (
-                  <Text> → {nombreLocalizacion(criterios.idLocalizacionDevolucion)}</Text>
-                ) : null}
+                {nombreLocalizacion(criterios.idLocalizacionRecogida)}
+                {criterios.idLocalizacionDevolucion && criterios.idLocalizacionDevolucion !== criterios.idLocalizacionRecogida
+                  ? ` → ${nombreLocalizacion(criterios.idLocalizacionDevolucion)}`
+                  : ''}
               </Text>
             ) : null}
           </View>
@@ -458,11 +520,16 @@ export default function CarResultsScreen() {
             <View style={s.grid}>
               {paged.map(v => (
                 <View key={v.idVehiculo} style={s.card}>
-                  {/* Card Header */}
-                  <View style={s.cardHeader}>
+                  {/* Card Header with gradient */}
+                  <LinearGradient
+                    colors={[Colors.extra1, Colors.titulo]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={s.cardHeader}
+                  >
                     <View style={s.brandRow}>
                       <View style={s.brandIcon}>
-                        <Ionicons name="car" size={16} color={Colors.titulo} />
+                        <Ionicons name="car" size={16} color="#fff" />
                       </View>
                       <View>
                         <Text style={s.brandName}>{v.marca}</Text>
@@ -472,15 +539,11 @@ export default function CarResultsScreen() {
                     <View style={s.badge}>
                       <Text style={s.badgeText}>{v.categoria?.nombre || 'General'}</Text>
                     </View>
-                  </View>
+                  </LinearGradient>
 
                   {/* Card Image */}
                   <View style={s.imageWrap}>
-                    <Image
-                      source={{ uri: v.imagenUrl || 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=800&q=80' }}
-                      style={s.image}
-                      resizeMode="cover"
-                    />
+                    <CarImage uri={v.imagenUrl} style={s.image} />
                     <View style={s.locationTag}>
                       <Ionicons name="location" size={12} color="#fff" />
                       <Text style={s.locationTagText}>{v.localizacion?.nombre || 'Sucursal'}</Text>
@@ -513,7 +576,7 @@ export default function CarResultsScreen() {
                     )}
                   </View>
 
-                  {/* Divider line */}
+                  {/* Divider notch */}
                   <View style={s.divider}>
                     <View style={[s.notch, s.notchLeft]} />
                     <View style={s.dividerLine} />
@@ -561,45 +624,183 @@ export default function CarResultsScreen() {
         </View>
         <Footer />
       </ScrollView>
+
+      {/* Calendar Modals */}
+      <CalendarModal
+        visible={showCalRecogida}
+        value={criterios.fechaRecogida || ''}
+        onSelect={d => setCriterios(c => ({ ...c, fechaRecogida: d }))}
+        onClose={() => setShowCalRecogida(false)}
+        minDate={today}
+      />
+      <CalendarModal
+        visible={showCalDevolucion}
+        value={criterios.fechaDevolucion || ''}
+        onSelect={d => setCriterios(c => ({ ...c, fechaDevolucion: d }))}
+        onClose={() => setShowCalDevolucion(false)}
+        minDate={criterios.fechaRecogida || today}
+      />
+
+      {/* Bottom Sheet Pickers */}
+      <BottomSheet
+        visible={openPicker === 'recogida'}
+        title={isWide ? 'Lugar de Recogida' : 'Sucursal de Recogida'}
+        options={locOptsRecogida}
+        activeValue={criterios.idLocalizacionRecogida}
+        onSelect={v => setCriterios(c => ({ ...c, idLocalizacionRecogida: +v }))}
+        onClose={() => setOpenPicker(null)}
+      />
+      <BottomSheet
+        visible={openPicker === 'devolucion'}
+        title="Lugar de Devolución"
+        options={locOptsDevolucion}
+        activeValue={criterios.idLocalizacionDevolucion ?? 0}
+        onSelect={v => setCriterios(c => ({ ...c, idLocalizacionDevolucion: +v === 0 ? null : +v }))}
+        onClose={() => setOpenPicker(null)}
+      />
+      <BottomSheet
+        visible={openPicker === 'categoria'}
+        title="Categoría"
+        options={catOpts}
+        activeValue={criterios.nombreCategoria}
+        onSelect={v => setCriterios(c => ({ ...c, nombreCategoria: v }))}
+        onClose={() => setOpenPicker(null)}
+      />
+      <BottomSheet
+        visible={openPicker === 'transmision'}
+        title="Transmisión"
+        options={TRANSMISION_OPTIONS}
+        activeValue={criterios.transmision}
+        onSelect={v => setCriterios(c => ({ ...c, transmision: v }))}
+        onClose={() => setOpenPicker(null)}
+      />
+      <BottomSheet
+        visible={openPicker === 'sort'}
+        title="Ordenar por"
+        options={SORT_OPTIONS}
+        activeValue={criterios.sort}
+        onSelect={v => setCriterios(c => ({ ...c, sort: v }))}
+        onClose={() => setOpenPicker(null)}
+      />
     </View>
   );
 }
+
+// Bottom sheet styles
+const bs = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 32,
+    paddingTop: 8,
+    maxHeight: '70%',
+  },
+  handle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(198,177,125,0.4)',
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+  title: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.titulo,
+    textAlign: 'center',
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(198,177,125,0.2)',
+    marginBottom: 4,
+  },
+  item: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: Spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(198,177,125,0.1)',
+  },
+  itemActive: {
+    backgroundColor: Colors.primaryLight,
+  },
+  itemText: {
+    flex: 1,
+    fontSize: 15,
+    color: Colors.extra1,
+  },
+  itemTextActive: {
+    color: Colors.titulo,
+    fontWeight: '600',
+  },
+});
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.bg },
   scroll: { flexGrow: 1 },
 
-  // Search Panel Floating
+  // Hero background (fixed height, image + label only)
+  heroBg: {
+    width: '100%',
+    justifyContent: 'flex-end',
+  },
+  categoryLabel: {
+    position: 'absolute',
+    top: 20,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(198,177,125,0.5)',
+    paddingVertical: 5,
+    paddingHorizontal: 16,
+    borderRadius: BorderRadius.xl,
+  },
+  categoryLabelText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+  },
+
+  // Search panel glass — sits outside hero with slight overlap
   searchBarFloating: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: 'rgba(255,255,255,0.97)',
+    borderWidth: 2,
+    borderColor: Colors.extra2,
     borderRadius: BorderRadius.lg,
     padding: Spacing.md,
     margin: Spacing.md,
+    marginTop: -20,
     gap: Spacing.md,
-    ...Shadow.md,
+    ...Shadow.lg,
   },
-  searchTitle: {
-    fontSize: 18,
+  panelTitle: {
+    fontSize: 17,
     fontWeight: '700',
     color: Colors.titulo,
-    textAlign: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    paddingBottom: Spacing.xs,
   },
-  formGrid: {
+  formRow: {
+    flexDirection: 'row',
     gap: Spacing.md,
   },
-  row: {
-    flexDirection: Platform.OS === 'web' ? 'row' : 'column',
-    gap: Spacing.md,
+  // Standalone (full-width) field — no flex: 1 to avoid column collapse
+  fieldFull: {
+    gap: 4,
   },
+  // Field inside a row — flex: 1 for equal split
+  fieldRow: {
+    flex: 1,
+    gap: 4,
+  },
+  // Keep for legacy usage
   field: {
     flex: 1,
     gap: 4,
-    position: 'relative', // for absolute dropdown list
   },
   label: {
     fontSize: 10,
@@ -607,6 +808,38 @@ const s = StyleSheet.create({
     color: Colors.subtitulo,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  pickerTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: Colors.accentBorder,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: 10,
+    height: 42,
+    backgroundColor: Colors.bg,
+    gap: 6,
+  },
+  pickerTriggerText: {
+    flex: 1,
+    fontSize: 13,
+    color: Colors.extra1,
+  },
+  dateTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: Colors.accentBorder,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: 10,
+    height: 42,
+    backgroundColor: Colors.bg,
+    gap: 6,
+  },
+  dateTriggerText: {
+    flex: 1,
+    fontSize: 13,
+    color: Colors.extra1,
   },
   inputWrap: {
     flexDirection: 'row',
@@ -617,46 +850,11 @@ const s = StyleSheet.create({
     paddingHorizontal: 10,
     height: 42,
     backgroundColor: Colors.bg,
-  },
-  pickerWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: Colors.accentBorder,
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: 10,
-    height: 42,
-    backgroundColor: Colors.bg,
-    zIndex: 10,
+    gap: 6,
   },
   textInp: {
     flex: 1,
     fontSize: 13,
-    color: Colors.extra1,
-    paddingLeft: Spacing.xs,
-  },
-  dropdownScroll: {
-    position: 'absolute',
-    top: 40,
-    left: 0,
-    right: 0,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    maxHeight: 120,
-    zIndex: 100,
-    borderRadius: BorderRadius.sm,
-    ...Shadow.md,
-    display: Platform.OS === 'web' ? 'flex' : 'none', // dropdown scrolls are mostly suited for Web hover/clicks
-  },
-  dropdownItem: {
-    paddingVertical: 8,
-    paddingHorizontal: Spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  dropdownText: {
-    fontSize: 12,
     color: Colors.extra1,
   },
   btnBuscar: {
@@ -667,7 +865,6 @@ const s = StyleSheet.create({
     backgroundColor: Colors.titulo,
     borderRadius: BorderRadius.md,
     paddingVertical: 12,
-    marginTop: Spacing.sm,
     ...Shadow.sm,
   },
   btnBuscarText: {
@@ -681,6 +878,7 @@ const s = StyleSheet.create({
     flex: 1,
     paddingHorizontal: Spacing.md,
     paddingBottom: Spacing.lg,
+    paddingTop: Spacing.md,
   },
   resultsHeader: {
     marginBottom: Spacing.md,
@@ -694,8 +892,6 @@ const s = StyleSheet.create({
     fontSize: 13,
     color: Colors.subtitulo,
     marginTop: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
   },
   loadingBox: {
     padding: Spacing.xxl,
@@ -745,8 +941,6 @@ const s = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(198,177,125,0.15)',
   },
   brandRow: {
     flexDirection: 'row',
@@ -757,21 +951,21 @@ const s = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: BorderRadius.full,
-    backgroundColor: Colors.primaryLight,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   brandName: {
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.extra1,
+    color: '#fff',
   },
   modelName: {
     fontSize: 11,
-    color: Colors.subtitulo,
+    color: 'rgba(255,255,255,0.75)',
   },
   badge: {
-    backgroundColor: Colors.primaryLight,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: BorderRadius.sm,
@@ -779,7 +973,7 @@ const s = StyleSheet.create({
   badgeText: {
     fontSize: 10,
     fontWeight: '700',
-    color: Colors.titulo,
+    color: '#fff',
   },
   imageWrap: {
     height: 160,
@@ -858,12 +1052,8 @@ const s = StyleSheet.create({
     borderColor: Colors.border,
     zIndex: 1,
   },
-  notchLeft: {
-    left: -6,
-  },
-  notchRight: {
-    right: -6,
-  },
+  notchLeft: { left: -6 },
+  notchRight: { right: -6 },
 
   // Card Footer pricing
   cardFooter: {

@@ -1,9 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Image, ActivityIndicator,
-  Platform, TouchableOpacity, Dimensions,
+  TouchableOpacity, useWindowDimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+
+// Safely extract a string label from a field that may come as a plain string or {nombre, ...} object
+function fieldLabel(v: any, fallback = ''): string {
+  if (v === null || v === undefined) return fallback;
+  if (typeof v === 'string') return v || fallback;
+  if (typeof v === 'object') return v.nombre ?? v.label ?? fallback;
+  return String(v) || fallback;
+}
 import { Ionicons } from '@expo/vector-icons';
 import Navbar from '../../../components/Navbar';
 import Footer from '../../../components/Footer';
@@ -11,8 +19,6 @@ import { CarService } from '../../../services/cars.service';
 import { EXTRAS_MOCK } from '../../../constants/car-mock';
 import { Colors, Spacing, BorderRadius, Shadow } from '../../../constants/theme';
 import { getStorageItem, setStorageItem } from '../../../services/storage';
-
-const { width } = Dimensions.get('window');
 
 interface LocationItem {
   idLocalizacion: number;
@@ -31,12 +37,12 @@ interface CategoryItem {
 interface VehicleItem {
   idVehiculo: number;
   codigoInterno: string;
-  marca: string;
+  marca: string | { idMarca: number; nombre: string };
   modelo: string;
   anio: number;
   color: string;
-  combustible: string;
-  transmision: string;
+  combustible: string | { nombre?: string };
+  transmision: string | { nombre?: string };
   capacidadPasajeros: number;
   capacidadMaletas: number;
   numeroPuertas: number;
@@ -44,9 +50,11 @@ interface VehicleItem {
   imagenUrl: string;
   provider: string;
   localizacion?: LocationItem;
-  categoria?: CategoryItem;
+  categoria?: CategoryItem | string;
   disponibilidad?: {
     cantidadDias: number;
+    fechaRecogida?: string;
+    fechaDevolucion?: string;
   };
   precio?: {
     precioBaseDia: number;
@@ -58,7 +66,14 @@ interface VehicleItem {
 
 export default function CarDetailScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, fechaRecogida, fechaDevolucion, precioDia } = useLocalSearchParams<{
+    id: string;
+    fechaRecogida?: string;
+    fechaDevolucion?: string;
+    precioDia?: string;
+  }>();
+  const { width } = useWindowDimensions();
+  const isWide = width >= 768;
 
   const [vehiculo, setVehiculo] = useState<VehicleItem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -108,17 +123,36 @@ export default function CarDetailScreen() {
 
   const specs = useMemo(() => {
     if (!vehiculo) return [];
+    const transmisionStr = fieldLabel(vehiculo.transmision, 'MANUAL');
+    const combustibleStr = fieldLabel(vehiculo.combustible, 'Gasolina');
     return [
       { icon: 'people-outline', label: 'Pasajeros', value: `${vehiculo.capacidadPasajeros} personas` },
       { icon: 'briefcase-outline', label: 'Maletas', value: `${vehiculo.capacidadMaletas} maletas` },
       { icon: 'key-outline', label: 'Puertas', value: `${vehiculo.numeroPuertas || 4} puertas` },
-      { icon: 'settings-outline', label: 'Transmisión', value: vehiculo.transmision === 'AUTOMATICA' ? 'Automática' : 'Manual' },
-      { icon: 'funnel-outline', label: 'Combustible', value: vehiculo.combustible ? (vehiculo.combustible.charAt(0) + vehiculo.combustible.slice(1).toLowerCase()) : 'Gasolina' },
+      { icon: 'settings-outline', label: 'Transmisión', value: transmisionStr.toUpperCase() === 'AUTOMATICA' ? 'Automática' : 'Manual' },
+      { icon: 'funnel-outline', label: 'Combustible', value: combustibleStr ? (combustibleStr.charAt(0).toUpperCase() + combustibleStr.slice(1).toLowerCase()) : 'Gasolina' },
       { icon: 'snow-outline', label: 'Aire acond.', value: vehiculo.aireAcondicionado ? 'Sí' : 'No' },
       { icon: 'color-palette-outline', label: 'Color', value: vehiculo.color || 'Plata' },
       { icon: 'calendar-outline', label: 'Año', value: `${vehiculo.anio}` },
     ];
   }, [vehiculo]);
+
+  // Price & days — calculated from passed params when backend doesn't return them
+  const diasEstimados = useMemo(() => {
+    if (vehiculo?.disponibilidad?.cantidadDias) return vehiculo.disponibilidad.cantidadDias;
+    const r = fechaRecogida || vehiculo?.disponibilidad?.fechaRecogida;
+    const d = fechaDevolucion || vehiculo?.disponibilidad?.fechaDevolucion;
+    if (r && d) {
+      const diff = Math.ceil((new Date(d).getTime() - new Date(r).getTime()) / 86400000);
+      return Math.max(1, diff);
+    }
+    return 1;
+  }, [vehiculo, fechaRecogida, fechaDevolucion]);
+
+  const precioDiaVal = vehiculo?.precio?.precioBaseDia ?? (precioDia ? parseFloat(precioDia) : 0);
+  const subtotalVal = vehiculo?.precio?.subtotalVehiculo ?? (precioDiaVal * diasEstimados);
+  const ivaVal = vehiculo?.precio?.iva ?? (subtotalVal * 0.15);
+  const totalVal = vehiculo?.precio?.total ?? (subtotalVal + ivaVal);
 
   if (loading) {
     return (
@@ -170,55 +204,55 @@ export default function CarDetailScreen() {
                 <Ionicons name="arrow-back" size={16} color="#fff" />
                 <Text style={s.heroBackText}>Volver</Text>
               </TouchableOpacity>
-              <Text style={s.breadcrumbText}>Autos  /  {vehiculo.categoria?.nombre || 'General'}  /  {vehiculo.marca} {vehiculo.modelo}</Text>
+              <Text style={s.breadcrumbText}>Autos  /  {fieldLabel(vehiculo.categoria, 'General')}  /  {fieldLabel(vehiculo.marca)} {vehiculo.modelo}</Text>
             </View>
 
             {/* Title / Badges */}
             <View style={s.heroInfo}>
               <View style={s.badges}>
-                <View style={s.badge}><Text style={s.badgeText}>{vehiculo.categoria?.nombre || 'General'}</Text></View>
-                <View style={s.badge}><Text style={s.badgeText}>{vehiculo.transmision === 'AUTOMATICA' ? 'Automática' : 'Manual'}</Text></View>
-                <View style={s.badge}><Text style={s.badgeText}>{vehiculo.combustible}</Text></View>
+                <View style={s.badge}><Text style={s.badgeText}>{fieldLabel(vehiculo.categoria, 'General')}</Text></View>
+                <View style={s.badge}><Text style={s.badgeText}>{fieldLabel(vehiculo.transmision, 'MANUAL').toUpperCase() === 'AUTOMATICA' ? 'Automática' : 'Manual'}</Text></View>
+                <View style={s.badge}><Text style={s.badgeText}>{fieldLabel(vehiculo.combustible, 'Gasolina')}</Text></View>
               </View>
-              <Text style={s.carTitle}>{vehiculo.marca} <Text style={s.carModel}>{vehiculo.modelo}</Text></Text>
+              <Text style={s.carTitle}>{fieldLabel(vehiculo.marca)} <Text style={s.carModel}>{vehiculo.modelo}</Text></Text>
               <Text style={s.carSub}>{vehiculo.anio} · {vehiculo.color}</Text>
             </View>
           </View>
         </View>
 
         {/* Main Grid */}
-        <View style={s.bodyLayout}>
+        <View style={[s.bodyLayout, isWide && { flexDirection: 'row' }]}>
           {/* Main Specs Left Column */}
-          <View style={s.leftCol}>
+          <View style={isWide ? s.leftCol : { gap: Spacing.md }}>
             {/* Location Address */}
             <View style={s.infoCard}>
               <View style={s.cardHeader}>
                 <Ionicons name="business-outline" size={18} color={Colors.titulo} />
                 <Text style={s.cardTitle}>Punto de Recogida</Text>
               </View>
-              <View style={s.locGrid}>
-                <View style={s.locItem}>
+              <View style={[s.locGrid, isWide && { flexDirection: 'row', flexWrap: 'wrap' }]}>
+                <View style={[s.locItem, isWide && { width: '45%' }]}>
                   <Ionicons name="location-outline" size={16} color={Colors.extra2} />
                   <View style={{ flex: 1 }}>
                     <Text style={s.locLabel}>{vehiculo.localizacion?.nombre || 'Sucursal'}</Text>
                     <Text style={s.locSub}>{vehiculo.localizacion?.direccion || 'Dirección no disponible'}</Text>
                   </View>
                 </View>
-                <View style={s.locItem}>
+                <View style={[s.locItem, isWide && { width: '45%' }]}>
                   <Ionicons name="time-outline" size={16} color={Colors.extra2} />
                   <View style={{ flex: 1 }}>
                     <Text style={s.locLabel}>Horario</Text>
                     <Text style={s.locSub}>{vehiculo.localizacion?.horarioAtencion || 'No disponible'}</Text>
                   </View>
                 </View>
-                <View style={s.locItem}>
+                <View style={[s.locItem, isWide && { width: '45%' }]}>
                   <Ionicons name="call-outline" size={16} color={Colors.extra2} />
                   <View style={{ flex: 1 }}>
                     <Text style={s.locLabel}>Teléfono</Text>
                     <Text style={s.locSub}>{vehiculo.localizacion?.telefono || 'No disponible'}</Text>
                   </View>
                 </View>
-                <View style={s.locItem}>
+                <View style={[s.locItem, isWide && { width: '45%' }]}>
                   <Ionicons name="mail-outline" size={16} color={Colors.extra2} />
                   <View style={{ flex: 1 }}>
                     <Text style={s.locLabel}>Correo</Text>
@@ -236,7 +270,7 @@ export default function CarDetailScreen() {
               </View>
               <View style={s.specsGrid}>
                 {specs.map((sp, idx) => (
-                  <View key={idx} style={s.specCard}>
+                  <View key={idx} style={[s.specCard, isWide && { width: '23%' }]}>
                     <View style={s.specIconWrap}>
                       <Ionicons name={sp.icon as any} size={18} color={Colors.titulo} />
                     </View>
@@ -274,7 +308,7 @@ export default function CarDetailScreen() {
           </View>
 
           {/* Sticky Sidebar Right Column */}
-          <View style={s.rightCol}>
+          <View style={isWide ? s.rightCol : {}}>
             <View style={s.stickyCard}>
               <View style={s.stickyHeader}>
                 <Ionicons name="cash-outline" size={16} color={Colors.titulo} />
@@ -284,24 +318,24 @@ export default function CarDetailScreen() {
               <View style={s.breakdown}>
                 <View style={s.breakdownRow}>
                   <Text style={s.breakdownLabel}>Precio por día</Text>
-                  <Text style={s.breakdownValue}>${(vehiculo.precio?.precioBaseDia ?? 0).toFixed(2)}</Text>
+                  <Text style={s.breakdownValue}>${precioDiaVal.toFixed(2)}</Text>
                 </View>
                 <View style={s.breakdownRow}>
                   <Text style={s.breakdownLabel}>Días estimados</Text>
-                  <Text style={s.breakdownValue}>{vehiculo.disponibilidad?.cantidadDias || 1}</Text>
+                  <Text style={s.breakdownValue}>{diasEstimados}</Text>
                 </View>
                 <View style={s.breakdownRow}>
                   <Text style={s.breakdownLabel}>Subtotal vehículo</Text>
-                  <Text style={s.breakdownValue}>${(vehiculo.precio?.subtotalVehiculo ?? (vehiculo.precio?.precioBaseDia || 0)).toFixed(2)}</Text>
+                  <Text style={s.breakdownValue}>${subtotalVal.toFixed(2)}</Text>
                 </View>
                 <View style={[s.breakdownRow, s.breakdownIva]}>
                   <Text style={s.breakdownLabel}>IVA (15%)</Text>
-                  <Text style={s.breakdownValue}>${(vehiculo.precio?.iva ?? 0).toFixed(2)}</Text>
+                  <Text style={s.breakdownValue}>${ivaVal.toFixed(2)}</Text>
                 </View>
                 <View style={s.stickyDivider} />
                 <View style={s.breakdownRow}>
                   <Text style={s.totalLabel}>Total estimado</Text>
-                  <Text style={s.totalValue}>${(vehiculo.precio?.total ?? (vehiculo.precio?.precioBaseDia || 0)).toFixed(2)}</Text>
+                  <Text style={s.totalValue}>${totalVal.toFixed(2)}</Text>
                 </View>
               </View>
 
@@ -463,7 +497,7 @@ const s = StyleSheet.create({
 
   // Main grid layout
   bodyLayout: {
-    flexDirection: Platform.OS === 'web' ? 'row' : 'column',
+    flexDirection: 'column',
     maxWidth: 960,
     width: '100%',
     alignSelf: 'center',
@@ -510,12 +544,12 @@ const s = StyleSheet.create({
 
   // Location details
   locGrid: {
-    flexDirection: Platform.OS === 'web' ? 'row' : 'column',
+    flexDirection: 'column',
     flexWrap: 'wrap',
     gap: Spacing.md,
   },
   locItem: {
-    width: Platform.OS === 'web' ? '45%' : '100%',
+    width: '100%',
     flexDirection: 'row',
     gap: Spacing.sm,
   },
@@ -537,7 +571,7 @@ const s = StyleSheet.create({
     gap: Spacing.sm,
   },
   specCard: {
-    width: Platform.OS === 'web' ? '23%' : '46%',
+    width: '46%',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
