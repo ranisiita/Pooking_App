@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Image, ActivityIndicator,
-  Platform, TouchableOpacity, Dimensions,
+  TouchableOpacity, useWindowDimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,8 +11,6 @@ import { CarService } from '../../../services/cars.service';
 import { EXTRAS_MOCK } from '../../../constants/car-mock';
 import { Colors, Spacing, BorderRadius, Shadow } from '../../../constants/theme';
 import { getStorageItem, setStorageItem } from '../../../services/storage';
-
-const { width } = Dimensions.get('window');
 
 interface LocationItem {
   idLocalizacion: number;
@@ -59,6 +57,8 @@ interface VehicleItem {
 export default function CarDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { width } = useWindowDimensions();
+  const isWide = width >= 768;
 
   const [vehiculo, setVehiculo] = useState<VehicleItem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -187,7 +187,7 @@ export default function CarDetailScreen() {
         </View>
 
         {/* Main Grid */}
-        <View style={s.bodyLayout}>
+        <View style={[s.bodyLayout, isWide && { flexDirection: 'row' }]}>
           {/* Main Specs Left Column */}
           <View style={s.leftCol}>
             {/* Location Address */}
@@ -196,29 +196,29 @@ export default function CarDetailScreen() {
                 <Ionicons name="business-outline" size={18} color={Colors.titulo} />
                 <Text style={s.cardTitle}>Punto de Recogida</Text>
               </View>
-              <View style={s.locGrid}>
-                <View style={s.locItem}>
+              <View style={[s.locGrid, isWide && { flexDirection: 'row', flexWrap: 'wrap' }]}>
+                <View style={[s.locItem, isWide && { width: '45%' }]}>
                   <Ionicons name="location-outline" size={16} color={Colors.extra2} />
                   <View style={{ flex: 1 }}>
                     <Text style={s.locLabel}>{vehiculo.localizacion?.nombre || 'Sucursal'}</Text>
                     <Text style={s.locSub}>{vehiculo.localizacion?.direccion || 'Dirección no disponible'}</Text>
                   </View>
                 </View>
-                <View style={s.locItem}>
+                <View style={[s.locItem, isWide && { width: '45%' }]}>
                   <Ionicons name="time-outline" size={16} color={Colors.extra2} />
                   <View style={{ flex: 1 }}>
                     <Text style={s.locLabel}>Horario</Text>
                     <Text style={s.locSub}>{vehiculo.localizacion?.horarioAtencion || 'No disponible'}</Text>
                   </View>
                 </View>
-                <View style={s.locItem}>
+                <View style={[s.locItem, isWide && { width: '45%' }]}>
                   <Ionicons name="call-outline" size={16} color={Colors.extra2} />
                   <View style={{ flex: 1 }}>
                     <Text style={s.locLabel}>Teléfono</Text>
                     <Text style={s.locSub}>{vehiculo.localizacion?.telefono || 'No disponible'}</Text>
                   </View>
                 </View>
-                <View style={s.locItem}>
+                <View style={[s.locItem, isWide && { width: '45%' }]}>
                   <Ionicons name="mail-outline" size={16} color={Colors.extra2} />
                   <View style={{ flex: 1 }}>
                     <Text style={s.locLabel}>Correo</Text>
@@ -236,7 +236,7 @@ export default function CarDetailScreen() {
               </View>
               <View style={s.specsGrid}>
                 {specs.map((sp, idx) => (
-                  <View key={idx} style={s.specCard}>
+                  <View key={idx} style={[s.specCard, isWide && { width: '23%' }]}>
                     <View style={s.specIconWrap}>
                       <Ionicons name={sp.icon as any} size={18} color={Colors.titulo} />
                     </View>
@@ -463,7 +463,7 @@ const s = StyleSheet.create({
 
   // Main grid layout
   bodyLayout: {
-    flexDirection: Platform.OS === 'web' ? 'row' : 'column',
+    flexDirection: 'column',
     maxWidth: 960,
     width: '100%',
     alignSelf: 'center',
@@ -510,12 +510,12 @@ const s = StyleSheet.create({
 
   // Location details
   locGrid: {
-    flexDirection: Platform.OS === 'web' ? 'row' : 'column',
+    flexDirection: 'column',
     flexWrap: 'wrap',
     gap: Spacing.md,
   },
   locItem: {
-    width: Platform.OS === 'web' ? '45%' : '100%',
+    width: '100%',
     flexDirection: 'row',
     gap: Spacing.sm,
   },
@@ -537,7 +537,7 @@ const s = StyleSheet.create({
     gap: Spacing.sm,
   },
   specCard: {
-    width: Platform.OS === 'web' ? '23%' : '46%',
+    width: '46%',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
