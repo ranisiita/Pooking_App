@@ -21,14 +21,18 @@ export default function AirportAutocomplete({
   icon = 'flight',
   hasError,
 }: AirportAutocompleteProps) {
-  const [aeropuertos, setAeropuertos] = useState<any[]>([]);
+  // All airports loaded once at mount — union of all 3 providers via cargarTodosAeropuertos()
+  const [allAirports, setAllAirports] = useState<any[]>([]);
+  // Server-side search results while user types (union across providers via buscarAeropuertos)
+  const [liveResults, setLiveResults] = useState<any[]>([]);
+
   const [query, setQuery] = useState(value || '');
   const [showDropdown, setShowDropdown] = useState(false);
   const [focused, setFocused] = useState(false);
 
   useEffect(() => {
     FlightService.cargarTodosAeropuertos()
-      .then(data => setAeropuertos(data))
+      .then(data => setAllAirports(data))
       .catch(err => console.warn('AirportAutocomplete: error loading airports', err));
   }, []);
 
@@ -36,16 +40,22 @@ export default function AirportAutocomplete({
     if (value !== query) setQuery(value || '');
   }, [value]);
 
-  const normalize = (str: string) =>
-    str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  // When user types ≥2 chars, fetch server-side results (union across all providers)
+  useEffect(() => {
+    if (!query || query.trim().length < 2) {
+      setLiveResults([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      FlightService.buscarAeropuertos(query.trim())
+        .then(data => setLiveResults(data))
+        .catch(() => setLiveResults([]));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [query]);
 
-  const suggestions = (() => {
-    if (!query || !query.trim()) return aeropuertos.slice(0, 8);
-    const q = normalize(query);
-    return aeropuertos
-      .filter(a => normalize(a.nombre).includes(q) || normalize(a.codigoIata).includes(q))
-      .slice(0, 8);
-  })();
+  // Show server results when typing (already a full union), otherwise show initial list
+  const suggestions = query.trim().length >= 2 ? liveResults : allAirports.slice(0, 8);
 
   return (
     <View style={s.wrap}>

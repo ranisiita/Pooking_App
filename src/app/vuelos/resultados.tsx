@@ -16,6 +16,7 @@ import { Colors, Spacing, BorderRadius, Shadow } from '../../constants/theme';
 import { getStorageItem, setStorageItem } from '../../services/storage';
 
 const ITEMS_PER_PAGE = 10;
+const AEROLINEAS = ['Nacho', 'Mary', 'Marcillo'] as const;
 
 interface FlightItem {
   guidServicio: string;
@@ -50,42 +51,31 @@ export default function FlightResultsScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
-  const heroHeight = isWide ? 420 : 360;
+  const heroHeight = isWide ? 380 : 260;
 
   const params = useLocalSearchParams<{
     origen?: string;
     destino?: string;
     fecha?: string;
-    fechaRegreso?: string;
-    tipoViaje?: string;
   }>();
 
   // Results state
   const [vuelos, setVuelos] = useState<FlightItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sortOption, setSortOption] = useState('recomendados');
+  const [aerolineasActivas, setAerolineasActivas] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
   const [expandidos, setExpandidos] = useState<Set<string>>(new Set());
   const [vueloParaConfirmar, setVueloParaConfirmar] = useState<FlightItem | null>(null);
   const [reservandoId, setReservandoId] = useState<string | null>(null);
 
-  // Resolved airport display names (for search panel)
-  const [oriName, setOriName] = useState('');
-  const [destName, setDestName] = useState('');
-
   // Editable search form
-  const [tipoViaje, setTipoViaje] = useState<'roundtrip' | 'oneway'>(
-    params.tipoViaje === 'roundtrip' ? 'roundtrip' : 'oneway'
-  );
   const [searchOrigen, setSearchOrigen] = useState(params.origen || '');
   const [searchOrigenDisplay, setSearchOrigenDisplay] = useState('');
   const [searchDestino, setSearchDestino] = useState(params.destino || '');
   const [searchDestinoDisplay, setSearchDestinoDisplay] = useState('');
   const [searchFecha, setSearchFecha] = useState(params.fecha || '');
-  const [searchFechaRegreso, setSearchFechaRegreso] = useState(params.fechaRegreso || '');
   const [showCalSalida, setShowCalSalida] = useState(false);
-  const [showCalRegreso, setShowCalRegreso] = useState(false);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -107,7 +97,6 @@ export default function FlightResultsScreen() {
           if (match) {
             oriIata = match.codigoIata;
             const display = match.display || `${match.nombre} (${match.codigoIata})`;
-            setOriName(display);
             setSearchOrigen(match.codigoIata);
             setSearchOrigenDisplay(display);
           }
@@ -115,7 +104,6 @@ export default function FlightResultsScreen() {
           const match = airList.find(a => a.codigoIata === oriIata);
           if (match) {
             const display = match.display || `${match.nombre} (${match.codigoIata})`;
-            setOriName(display);
             setSearchOrigenDisplay(display);
           }
         }
@@ -128,7 +116,6 @@ export default function FlightResultsScreen() {
           if (match) {
             destIata = match.codigoIata;
             const display = match.display || `${match.nombre} (${match.codigoIata})`;
-            setDestName(display);
             setSearchDestino(match.codigoIata);
             setSearchDestinoDisplay(display);
           }
@@ -136,7 +123,6 @@ export default function FlightResultsScreen() {
           const match = airList.find(a => a.codigoIata === destIata);
           if (match) {
             const display = match.display || `${match.nombre} (${match.codigoIata})`;
-            setDestName(display);
             setSearchDestinoDisplay(display);
           }
         }
@@ -164,6 +150,7 @@ export default function FlightResultsScreen() {
     setLoading(true);
     setError(null);
     setCurrentPage(1);
+    setAerolineasActivas(new Set());
     try {
       const data = await FlightService.buscarVuelos({
         origen: searchOrigen,
@@ -187,20 +174,18 @@ export default function FlightResultsScreen() {
     setExpandidos(next);
   };
 
+  const toggleAerolinea = (name: string) => {
+    const next = new Set(aerolineasActivas);
+    if (next.has(name)) next.delete(name);
+    else next.add(name);
+    setAerolineasActivas(next);
+    setCurrentPage(1);
+  };
+
   const filtered = useMemo(() => {
-    const r = [...vuelos];
-    if (sortOption === 'precio_asc') r.sort((a, b) => a.precioBase - b.precioBase);
-    else if (sortOption === 'precio_desc') r.sort((a, b) => b.precioBase - a.precioBase);
-    else if (sortOption === 'duracion') {
-      const getMin = (d: string) => {
-        const parts = d.match(/(\d+)h\s*(\d*)m?/);
-        if (!parts) return 0;
-        return (parseInt(parts[1]) || 0) * 60 + (parseInt(parts[2]) || 0);
-      };
-      r.sort((a, b) => getMin(a.duracion) - getMin(b.duracion));
-    }
-    return r;
-  }, [vuelos, sortOption]);
+    if (aerolineasActivas.size === 0) return vuelos;
+    return vuelos.filter(v => aerolineasActivas.has(v.proveedor));
+  }, [vuelos, aerolineasActivas]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
   const paged = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
@@ -266,35 +251,13 @@ export default function FlightResultsScreen() {
             style={StyleSheet.absoluteFill}
           />
           <View style={s.heroContent}>
-            <Text style={s.heroTitle}>Busca tu vuelo</Text>
+            <Text style={[s.heroTitle, isWide && { fontSize: 30 }]}>Busca tu vuelo</Text>
           </View>
         </ImageBackground>
 
         {/* Glass search panel — overlaps hero bottom edge */}
         <View style={s.glassPanelWrap}>
           <View style={s.glassPanel}>
-            {/* Trip type tabs */}
-            <View style={s.tripTabs}>
-              <TouchableOpacity
-                style={[s.tripTab, tipoViaje === 'roundtrip' && s.tripTabActive]}
-                onPress={() => setTipoViaje('roundtrip')}
-                activeOpacity={0.8}
-              >
-                <Text style={[s.tripTabText, tipoViaje === 'roundtrip' && s.tripTabTextActive]}>
-                  IDA Y VUELTA
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.tripTab, tipoViaje === 'oneway' && s.tripTabActive]}
-                onPress={() => setTipoViaje('oneway')}
-                activeOpacity={0.8}
-              >
-                <Text style={[s.tripTabText, tipoViaje === 'oneway' && s.tripTabTextActive]}>
-                  SOLO IDA
-                </Text>
-              </TouchableOpacity>
-            </View>
-
             {/* Origen / Destino autocomplete */}
             <View style={[s.fieldRow, isWide && { flexDirection: 'row' }]}>
               <View style={[s.acField, { zIndex: 12 }]}>
@@ -317,26 +280,13 @@ export default function FlightResultsScreen() {
               </View>
             </View>
 
-            {/* Dates */}
-            <View style={[s.fieldRow, isWide && { flexDirection: 'row' }]}>
-              <View style={s.dateField}>
-                <Text style={s.fieldLabel}>Fecha de salida</Text>
-                <TouchableOpacity style={s.dateTrigger} onPress={() => setShowCalSalida(true)} activeOpacity={0.8}>
-                  <Ionicons name="calendar-outline" size={16} color="rgba(255,255,255,0.8)" />
-                  <Text style={s.dateTriggerText}>{formatDisplayDate(searchFecha)}</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={[s.dateField, tipoViaje === 'oneway' && { opacity: 0.4 }]}>
-                <Text style={s.fieldLabel}>Fecha de regreso</Text>
-                <TouchableOpacity
-                  style={s.dateTrigger}
-                  onPress={tipoViaje === 'roundtrip' ? () => setShowCalRegreso(true) : undefined}
-                  activeOpacity={tipoViaje === 'roundtrip' ? 0.8 : 1}
-                >
-                  <Ionicons name="calendar-outline" size={16} color="rgba(255,255,255,0.8)" />
-                  <Text style={s.dateTriggerText}>{formatDisplayDate(searchFechaRegreso)}</Text>
-                </TouchableOpacity>
-              </View>
+            {/* Date */}
+            <View style={s.dateField}>
+              <Text style={s.fieldLabel}>Fecha de salida</Text>
+              <TouchableOpacity style={s.dateTrigger} onPress={() => setShowCalSalida(true)} activeOpacity={0.8}>
+                <Ionicons name="calendar-outline" size={16} color="rgba(255,255,255,0.8)" />
+                <Text style={s.dateTriggerText}>{formatDisplayDate(searchFecha)}</Text>
+              </TouchableOpacity>
             </View>
 
             {/* Search button */}
@@ -347,32 +297,30 @@ export default function FlightResultsScreen() {
           </View>
         </View>
 
-        {/* Results Info Bar */}
-        <View style={s.resultsBar}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.resultsCount}>
-              <Text style={{ fontWeight: '700' }}>{filtered.length} vuelo{filtered.length !== 1 ? 's' : ''}</Text>
-              {' '}encontrado{filtered.length !== 1 ? 's' : ''}
-            </Text>
-          </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {[
-              { v: 'recomendados', l: 'Recomendados' },
-              { v: 'precio_asc', l: 'Menor precio' },
-              { v: 'precio_desc', l: 'Mayor precio' },
-              { v: 'duracion', l: 'Menor duración' },
-            ].map(opt => (
-              <TouchableOpacity
-                key={opt.v}
-                style={[s.sortChip, sortOption === opt.v && s.sortChipOn]}
-                onPress={() => { setSortOption(opt.v); setCurrentPage(1); }}
-              >
-                <Text style={[s.sortChipText, sortOption === opt.v && { color: Colors.titulo, fontWeight: '600' }]}>
-                  {opt.l}
-                </Text>
-              </TouchableOpacity>
-            ))}
+        {/* Airline filter chips */}
+        <View style={s.airlineBar}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.airlineBarInner}>
+            {AEROLINEAS.map(name => {
+              const active = aerolineasActivas.has(name);
+              return (
+                <TouchableOpacity
+                  key={name}
+                  style={[s.chip, active && s.chipOn]}
+                  onPress={() => toggleAerolinea(name)}
+                >
+                  <Text style={[s.chipText, active && s.chipTextOn]}>{name}</Text>
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
+        </View>
+
+        {/* Results count */}
+        <View style={s.resultsBar}>
+          <Text style={s.resultsCount}>
+            <Text style={{ fontWeight: '700' }}>{filtered.length} vuelo{filtered.length !== 1 ? 's' : ''}</Text>
+            {' '}encontrado{filtered.length !== 1 ? 's' : ''}
+          </Text>
         </View>
 
         {/* Page Content */}
@@ -402,11 +350,7 @@ export default function FlightResultsScreen() {
                   const isExp = expandidos.has(v.guidServicio);
                   return (
                     <View key={v.guidServicio} style={s.card}>
-                      <TouchableOpacity
-                        style={s.cardInteractive}
-                        onPress={() => toggleDetalle(v.guidServicio)}
-                        activeOpacity={0.9}
-                      >
+                      <View style={s.cardInteractive}>
                         {/* Header with gradient */}
                         <LinearGradient
                           colors={[Colors.titulo, '#9d6961']}
@@ -420,7 +364,9 @@ export default function FlightResultsScreen() {
                             </View>
                             <View>
                               <Text style={s.airlineName}>{v.proveedor}</Text>
-                              <Text style={s.flightCode}>Vuelo {v.nombreComercial}</Text>
+                              {!!v.nombreComercial && (
+                                <Text style={s.flightCode}>Vuelo {v.nombreComercial}</Text>
+                              )}
                             </View>
                           </View>
                           <View style={[s.scalesBadge, v.escalas === 0 ? s.scalesDirect : s.scalesStop]}>
@@ -442,7 +388,9 @@ export default function FlightResultsScreen() {
                           <View style={s.routeNode}>
                             <Text style={s.routeTime}>{v.salida}</Text>
                             <Text style={s.routeIata}>{v.origen}</Text>
-                            <Text style={s.routeAirport} numberOfLines={1}>Aeropuerto</Text>
+                            <Text style={s.routeAirport} numberOfLines={1}>
+                              {v.nombreOrigen || 'Aeropuerto'}
+                            </Text>
                           </View>
 
                           <View style={s.routeJourney}>
@@ -459,7 +407,9 @@ export default function FlightResultsScreen() {
                           <View style={[s.routeNode, { alignItems: 'flex-end' }]}>
                             <Text style={s.routeTime}>{v.llegada}</Text>
                             <Text style={s.routeIata}>{v.destino}</Text>
-                            <Text style={s.routeAirport} numberOfLines={1}>Aeropuerto</Text>
+                            <Text style={s.routeAirport} numberOfLines={1}>
+                              {v.nombreDestino || 'Aeropuerto'}
+                            </Text>
                           </View>
                         </View>
 
@@ -471,10 +421,16 @@ export default function FlightResultsScreen() {
                             <Text style={s.priceSub}>por persona</Text>
                           </View>
                           <View style={s.actions}>
-                            <TouchableOpacity style={s.btnDetails} onPress={() => toggleDetalle(v.guidServicio)}>
-                              <Ionicons name="information-circle-outline" size={16} color={Colors.titulo} />
-                              <Text style={s.btnDetailsText}>Detalles</Text>
-                              <Ionicons name={isExp ? 'chevron-up' : 'chevron-down'} size={14} color={Colors.titulo} />
+                            <TouchableOpacity
+                              style={s.btnDetailsCircle}
+                              onPress={() => toggleDetalle(v.guidServicio)}
+                              activeOpacity={0.75}
+                            >
+                              <Ionicons
+                                name={isExp ? 'information-circle' : 'information-circle-outline'}
+                                size={22}
+                                color={Colors.titulo}
+                              />
                             </TouchableOpacity>
                             <TouchableOpacity style={s.btnReserve} onPress={() => setVueloParaConfirmar(v)} activeOpacity={0.8}>
                               <Text style={s.btnReserveText}>Reservar</Text>
@@ -482,7 +438,7 @@ export default function FlightResultsScreen() {
                             </TouchableOpacity>
                           </View>
                         </View>
-                      </TouchableOpacity>
+                      </View>
 
                       {/* Expandable Details */}
                       {isExp && (
@@ -541,20 +497,13 @@ export default function FlightResultsScreen() {
         <Footer />
       </ScrollView>
 
-      {/* Calendar Modals */}
+      {/* Calendar Modal */}
       <CalendarModal
         visible={showCalSalida}
         value={searchFecha}
         onSelect={d => setSearchFecha(d)}
         onClose={() => setShowCalSalida(false)}
         minDate={today}
-      />
-      <CalendarModal
-        visible={showCalRegreso}
-        value={searchFechaRegreso}
-        onSelect={d => setSearchFechaRegreso(d)}
-        onClose={() => setShowCalRegreso(false)}
-        minDate={searchFecha || today}
       />
 
       {/* Confirmation Modal */}
@@ -627,11 +576,11 @@ const s = StyleSheet.create({
   },
   heroContent: {
     zIndex: 1,
-    paddingBottom: Spacing.xl,
+    paddingBottom: Spacing.lg,
     alignItems: 'center',
   },
   heroTitle: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '700',
     color: '#fff',
     textAlign: 'center',
@@ -640,53 +589,24 @@ const s = StyleSheet.create({
 
   // Glass search panel (sits below hero, overlaps with negative marginTop)
   glassPanelWrap: {
-    marginTop: -Spacing.xl,
+    marginTop: -Spacing.lg,
     paddingHorizontal: Spacing.md,
     zIndex: 10,
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm,
   },
   glassPanel: {
     backgroundColor: 'rgba(28,22,20,0.72)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.12)',
     borderRadius: 20,
-    padding: Spacing.md,
-    gap: Spacing.md,
+    padding: 12,
+    gap: 10,
     ...Shadow.lg,
-  },
-
-  // Trip type tabs
-  tripTabs: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(0,0,0,0.25)',
-    borderRadius: BorderRadius.lg,
-    padding: 3,
-    gap: 3,
-  },
-  tripTab: {
-    flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: BorderRadius.md,
-    alignItems: 'center',
-  },
-  tripTabActive: {
-    backgroundColor: Colors.titulo,
-    ...Shadow.sm,
-  },
-  tripTabText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.6)',
-    letterSpacing: 0.5,
-  },
-  tripTabTextActive: {
-    color: '#fff',
   },
 
   // Autocomplete fields
   fieldRow: {
-    gap: Spacing.sm,
+    gap: 8,
   },
   acField: {
     flex: 1,
@@ -729,7 +649,7 @@ const s = StyleSheet.create({
     gap: Spacing.sm,
     backgroundColor: Colors.titulo,
     borderRadius: BorderRadius.md,
-    paddingVertical: 13,
+    paddingVertical: 12,
     ...Shadow.md,
   },
   btnSearchText: {
@@ -739,38 +659,51 @@ const s = StyleSheet.create({
     letterSpacing: 0.2,
   },
 
-  // Results bar
-  resultsBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+  // Airline filter chips bar
+  airlineBar: {
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
     backgroundColor: Colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
-    flexWrap: 'wrap',
-    gap: Spacing.md,
   },
-  resultsCount: {
-    fontSize: 14,
-    color: Colors.extra1,
+  airlineBarInner: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
   },
-  sortChip: {
+  chip: {
     paddingHorizontal: Spacing.md,
     paddingVertical: 6,
     borderRadius: BorderRadius.full,
     borderWidth: 1,
     borderColor: Colors.border,
     backgroundColor: Colors.bg,
-    marginLeft: 6,
   },
-  sortChipOn: {
+  chipOn: {
     borderColor: Colors.titulo,
     backgroundColor: Colors.primaryLight,
   },
-  sortChipText: {
+  chipText: {
     fontSize: 12,
     color: Colors.subtitulo,
+  },
+  chipTextOn: {
+    color: Colors.titulo,
+    fontWeight: '600',
+  },
+
+  // Results count bar
+  resultsBar: {
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    backgroundColor: Colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  resultsCount: {
+    fontSize: 14,
+    color: Colors.extra1,
   },
 
   // Page body
@@ -834,7 +767,6 @@ const s = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: Spacing.md,
-    marginBottom: 0,
   },
   airlineInfo: {
     flexDirection: 'row',
@@ -911,8 +843,14 @@ const s = StyleSheet.create({
   },
   routeNode: { width: '30%' },
   routeTime: { fontSize: 22, fontWeight: '700', color: Colors.extra1 },
-  routeIata: { fontSize: 15, fontWeight: '700', color: Colors.titulo, marginVertical: 2 },
-  routeAirport: { fontSize: 12, color: Colors.subtitulo },
+  routeIata: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.titulo,
+    letterSpacing: 1.5,
+    marginVertical: 2,
+  },
+  routeAirport: { fontSize: 11, color: Colors.subtitulo },
   routeJourney: {
     flex: 1,
     alignItems: 'center',
@@ -940,7 +878,7 @@ const s = StyleSheet.create({
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: 'rgba(198, 177, 125, 0.15)',
     paddingTop: Spacing.sm,
@@ -951,19 +889,17 @@ const s = StyleSheet.create({
   priceLabel: { fontSize: 9, fontWeight: '600', color: Colors.subtitulo, letterSpacing: 0.5 },
   priceValue: { fontSize: 20, fontWeight: '700', color: Colors.titulo },
   priceSub: { fontSize: 11, color: Colors.subtitulo },
-  actions: { flexDirection: 'row', gap: Spacing.sm },
-  btnDetails: {
-    flexDirection: 'row',
+  actions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  btnDetailsCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.primaryLight,
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'center',
     borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: BorderRadius.sm,
-    paddingVertical: 8,
-    paddingHorizontal: Spacing.sm,
-    backgroundColor: Colors.bg,
+    borderColor: 'rgba(142,90,84,0.2)',
   },
-  btnDetailsText: { color: Colors.titulo, fontWeight: '600', fontSize: 12 },
   btnReserve: {
     flexDirection: 'row',
     alignItems: 'center',
