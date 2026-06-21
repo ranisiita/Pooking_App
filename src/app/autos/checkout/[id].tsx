@@ -8,6 +8,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Navbar from '../../../components/Navbar';
 import Footer from '../../../components/Footer';
+import CalendarModal from '../../../components/CalendarModal';
 import { CarService } from '../../../services/cars.service';
 import { EXTRAS_MOCK, Extra } from '../../../constants/car-mock';
 import { Colors, Spacing, BorderRadius, Shadow } from '../../../constants/theme';
@@ -100,6 +101,8 @@ export default function CarCheckoutScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const [openPicker, setOpenPicker] = useState<'devolucion' | 'tipoDoc' | null>(null);
+  const [calLicencia, setCalLicencia] = useState<'main' | number | null>(null);
+  const today = new Date().toISOString().split('T')[0];
   
   const [localizaciones, setLocalizaciones] = useState<LocationItem[]>([]);
   const [extras, setExtras] = useState<ExtraConCantidad[]>([]);
@@ -485,9 +488,17 @@ export default function CarCheckoutScreen() {
                 <View style={s.row}>
                   <View style={s.field}>
                     <Text style={s.label}>Fecha Vencimiento Licencia *</Text>
-                    <View style={[s.inputWrap, errConductor.fechaVencimientoLicencia && s.inputWrapError]}>
-                      <TextInput style={s.textInp} value={conductor.fechaVencimientoLicencia} onChangeText={v => setConductor({ ...conductor, fechaVencimientoLicencia: v })} placeholder="YYYY-MM-DD" />
-                    </View>
+                    <TouchableOpacity
+                      style={[s.inputWrap, errConductor.fechaVencimientoLicencia && s.inputWrapError]}
+                      onPress={() => setCalLicencia('main')}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="calendar-outline" size={16} color={Colors.extra2} />
+                      <Text style={[s.textInp, { paddingVertical: 0, color: conductor.fechaVencimientoLicencia ? Colors.extra1 : Colors.textMuted }]}>
+                        {conductor.fechaVencimientoLicencia || 'Seleccionar fecha'}
+                      </Text>
+                      <Ionicons name="chevron-down" size={14} color={Colors.subtitulo} />
+                    </TouchableOpacity>
                     {errConductor.fechaVencimientoLicencia && <Text style={s.err}>{errConductor.fechaVencimientoLicencia}</Text>}
                   </View>
                   <View style={s.field}>
@@ -566,11 +577,17 @@ export default function CarCheckoutScreen() {
                       </View>
                       <View style={s.field}>
                         <Text style={s.label}>Licencia Vence *</Text>
-                        <View style={[s.inputWrap, errPasajeros[i]?.fechaVencimientoLicencia && s.inputWrapError]}>
-                          <TextInput style={s.textInp} value={p.fechaVencimientoLicencia} onChangeText={v => {
-                            const next = [...otrosPasajeros]; next[i].fechaVencimientoLicencia = v; setOtrosPasajeros(next);
-                          }} placeholder="YYYY-MM-DD" />
-                        </View>
+                        <TouchableOpacity
+                          style={[s.inputWrap, errPasajeros[i]?.fechaVencimientoLicencia && s.inputWrapError]}
+                          onPress={() => setCalLicencia(i)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="calendar-outline" size={16} color={Colors.extra2} />
+                          <Text style={[s.textInp, { paddingVertical: 0, color: p.fechaVencimientoLicencia ? Colors.extra1 : Colors.textMuted }]}>
+                            {p.fechaVencimientoLicencia || 'Seleccionar fecha'}
+                          </Text>
+                          <Ionicons name="chevron-down" size={14} color={Colors.subtitulo} />
+                        </TouchableOpacity>
                       </View>
                     </View>
 
@@ -651,6 +668,29 @@ export default function CarCheckoutScreen() {
         activeValue={conductor.tipoIdentificacion}
         onSelect={v => setConductor({ ...conductor, tipoIdentificacion: v })}
         onClose={() => setOpenPicker(null)}
+      />
+
+      <CalendarModal
+        visible={calLicencia !== null}
+        value={
+          calLicencia === 'main'
+            ? conductor.fechaVencimientoLicencia
+            : typeof calLicencia === 'number'
+              ? (otrosPasajeros[calLicencia]?.fechaVencimientoLicencia ?? '')
+              : ''
+        }
+        minDate={today}
+        onSelect={date => {
+          if (calLicencia === 'main') {
+            setConductor(c => ({ ...c, fechaVencimientoLicencia: date }));
+          } else if (typeof calLicencia === 'number') {
+            const next = [...otrosPasajeros];
+            next[calLicencia] = { ...next[calLicencia], fechaVencimientoLicencia: date };
+            setOtrosPasajeros(next);
+          }
+          setCalLicencia(null);
+        }}
+        onClose={() => setCalLicencia(null)}
       />
     </KeyboardAvoidingView>
   );

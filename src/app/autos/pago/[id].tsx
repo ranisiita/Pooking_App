@@ -21,6 +21,7 @@ export default function CarPaymentScreen() {
   const [vehiculo, setVehiculo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [confirmando, setConfirmando] = useState(false);
 
   const [extras, setExtras] = useState<any[]>([]);
   const [conductor, setConductor] = useState<any>(null);
@@ -116,6 +117,7 @@ export default function CarPaymentScreen() {
   const handlePagoExitoso = async () => {
     if (!vehiculo || !conductor) return;
 
+    setConfirmando(true);
     try {
       const token = await getStorageItem('token');
       const guidCliente = await getStorageItem('usuarioGuid');
@@ -234,6 +236,7 @@ export default function CarPaymentScreen() {
 
     } catch (err) {
       console.error(err);
+      setConfirmando(false);
       alert('Error al procesar y guardar tu reserva de auto.');
     }
   };
@@ -290,6 +293,14 @@ export default function CarPaymentScreen() {
         </View>
         <Footer />
       </ScrollView>
+
+      {confirmando && (
+        <View style={s.confirmandoOverlay}>
+          <ActivityIndicator size="large" color={Colors.titulo} />
+          <Text style={s.confirmandoText}>Confirmando tu reserva...</Text>
+          <Text style={s.confirmandoSub}>Por favor espera un momento</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -299,6 +310,24 @@ const s = StyleSheet.create({
   scroll: { flexGrow: 1 },
   loadingBox: { flex: 1, padding: Spacing.xxl, alignItems: 'center', justifyContent: 'center', minHeight: 400 },
   loadingText: { color: Colors.subtitulo, fontSize: 13, marginTop: 8 },
+
+  confirmandoOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,255,255,0.93)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 100,
+    gap: Spacing.md,
+  },
+  confirmandoText: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: Colors.titulo,
+  },
+  confirmandoSub: {
+    fontSize: 13,
+    color: Colors.subtitulo,
+  },
   errorBox: { flex: 1, padding: Spacing.xxl, alignItems: 'center', justifyContent: 'center', minHeight: 400, gap: Spacing.md },
   errorTitle: { fontSize: 18, fontWeight: '700', color: Colors.titulo },
   errorText: { fontSize: 14, color: Colors.subtitulo, textAlign: 'center' },
