@@ -192,7 +192,12 @@ export default function CarResultsScreen() {
         setLocalizaciones(locs);
         setCategorias(cats);
         if (!criterios.idLocalizacionRecogida && locs.length > 0) {
-          setCriterios(c => ({ ...c, idLocalizacionRecogida: locs[0].idLocalizacion }));
+          const autoId = locs[0].idLocalizacion;
+          // Functional update avoids overwriting a selection the user made while
+          // localizaciones were still loading (race condition guard)
+          setCriterios(c => c.idLocalizacionRecogida ? c : { ...c, idLocalizacionRecogida: autoId });
+          // Re-trigger search now that we have a valid localizacion
+          buscarResultados(autoId);
         }
       } catch (err) {
         console.warn('Error loading filters data', err);
@@ -215,11 +220,14 @@ export default function CarResultsScreen() {
     params.sort,
   ]);
 
-  const buscarResultados = async () => {
+  // idLocRecogidaOverride lets callers bypass stale criterios/params state
+  const buscarResultados = async (idLocRecogidaOverride?: number) => {
     setLoading(true);
     try {
       const searchParams: CriteriosBusquedaAutos = {
-        idLocalizacionRecogida: params.idLocalizacionRecogida ? +params.idLocalizacionRecogida : criterios.idLocalizacionRecogida,
+        idLocalizacionRecogida: idLocRecogidaOverride !== undefined
+          ? idLocRecogidaOverride
+          : (params.idLocalizacionRecogida ? +params.idLocalizacionRecogida : criterios.idLocalizacionRecogida),
         idLocalizacionDevolucion: params.idLocalizacionDevolucion ? +params.idLocalizacionDevolucion : criterios.idLocalizacionDevolucion,
         fechaRecogida: params.fechaRecogida || criterios.fechaRecogida,
         fechaDevolucion: params.fechaDevolucion || criterios.fechaDevolucion,
