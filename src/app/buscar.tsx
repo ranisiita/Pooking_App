@@ -63,9 +63,11 @@ const SORT_OPTIONS = [
 ];
 
 const ATTRACTION_PROVIDERS = [
-  { value: 'todos',  label: 'Todos' },
-  { value: 'viator', label: 'Viator' },
-  { value: 'airbnb', label: 'Airbnb Experiences' },
+  { value: 'todos',     label: 'Todos' },
+  { value: 'jhonatan',  label: 'ReservX' },
+  { value: 'luis',      label: 'Travel of your dreams' },
+  { value: 'francisco', label: 'Atraxia' },
+  { value: 'angel',     label: 'Aventuras Reservas' },
 ];
 
 // ─── Atoms ────────────────────────────────────────────────────────────────────
@@ -383,7 +385,7 @@ export default function SearchScreen() {
   };
 
   const buscarAtracciones = () => {
-    router.push({ pathname: '/atracciones/index' as any, params: { proveedor: atrac.proveedor, ciudad: atrac.destino.trim(), fecha: atrac.fecha } });
+    router.push({ pathname: '/atracciones' as any, params: { proveedor: atrac.proveedor, ciudad: atrac.destino.trim(), fecha: atrac.fecha } });
   };
 
   // ── Row helper (Stacks on mobile, row on desktop) ─────────────────────────

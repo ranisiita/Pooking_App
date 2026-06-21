@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, ActivityIndicator, Platform, KeyboardAvoidingView,
+  ScrollView, ActivityIndicator, Platform, KeyboardAvoidingView, useWindowDimensions, Pressable, Image,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Navbar from '../../../components/Navbar';
 import Footer from '../../../components/Footer';
 import PaymentHall from '../../../components/PaymentHall';
+import CalendarModal from '../../../components/CalendarModal';
 import { AtraccionesService, ATTRACTION_PROVIDER_LABELS, getProviderCompanyName } from '../../../services/atracciones.service';
 import { Colors, Spacing, BorderRadius, Shadow } from '../../../constants/theme';
 import { getStorageItem, setStorageItem } from '../../../services/storage';
@@ -37,11 +38,17 @@ interface AttractionDetail {
   moneda: string;
   imagen_principal: string;
   provider: string;
+  ciudad?: string;
+  pais?: string;
+  duracion_minutos?: number;
 }
 
 export default function AttractionBookingScreen() {
   const router = useRouter();
   const { id, provider } = useLocalSearchParams<{ id: string; provider: string }>();
+
+  const [containerWidth, setContainerWidth] = useState(0);
+  const isWide = containerWidth >= 768;
 
   const [detalle, setDetalle] = useState<AttractionDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -76,6 +83,11 @@ export default function AttractionBookingScreen() {
   const [enviandoPago, setEnviandoPago] = useState(false);
   const [factura, setFactura] = useState<any>(null);
 
+  // Dropdown states
+  const [showRangoDropdown, setShowRangoDropdown] = useState(false);
+  const [showTipoDocDropdown, setShowTipoDocDropdown] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
   const today = new Date().toISOString().split('T')[0];
 
   useEffect(() => {
@@ -99,7 +111,14 @@ export default function AttractionBookingScreen() {
         // Load schedules
         setHorariosLoading(true);
         const scheds = await AtraccionesService.getHorarios(id, undefined, prov);
-        setHorariosCrudos(scheds?.data ?? []);
+        const list = scheds?.data ?? [];
+        setHorariosCrudos(list);
+        if (list.length > 0) {
+          const earliestDate = list[0].fecha;
+          if (earliestDate) {
+            setFechaInicio(earliestDate);
+          }
+        }
         setHorariosLoading(false);
 
         // Fetch prefilled details from logged-in user
@@ -191,7 +210,16 @@ export default function AttractionBookingScreen() {
         value: (cantidades[t.tck_guid] ?? 0) * t.precio
       }));
   }, [tickets, cantidades]);
+  const puedeReservar = useMemo(() => {
+    return !!horarioSeleccionado && totalTickets > 0;
+  }, [horarioSeleccionado, totalTickets]);
 
+  const formatDuration = (minutos: number) => {
+    const h = Math.floor(minutos / 60);
+    const m = minutos % 60;
+    if (h === 0) return `${m} min`;
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  };
   const validate = () => {
     const err: typeof errCliente = {};
     let ok = true;
@@ -358,272 +386,456 @@ export default function AttractionBookingScreen() {
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Navbar />
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-        <View style={s.container}>
-          {/* Booking flow main card */}
-          <View style={s.card}>
-            <Text style={s.atrHeaderName}>{detalle.nombre}</Text>
-            
-            {/* Step 1: Horarios */}
-            <Text style={s.sectionTitle}>1. Selecciona Fecha y Horario</Text>
-            <View style={s.row}>
-              <View style={s.field}>
-                <Text style={s.label}>Fecha Inicio Consulta</Text>
-                <View style={s.inputWrap}>
-                  <Ionicons name="calendar-outline" size={16} color={Colors.extra2} />
-                  <TextInput style={s.textInp} value={fechaInicio} onChangeText={setFechaInicio} placeholder="YYYY-MM-DD" />
+        <View style={s.container} onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}>
+          {factura ? (
+            <View style={[s.card, { borderTopWidth: 5, borderTopColor: Colors.success }]}>
+              <View style={s.invHeader}>
+                <Ionicons name="checkmark-circle" size={48} color={Colors.success} />
+                <Text style={s.invTitle}>¡Pago Completado Exitosamente!</Text>
+                <Text style={s.invSub}>Factura #{factura.fact_numero || `FAC-${id}`}</Text>
+              </View>
+
+              <View style={s.invBody}>
+                <View style={s.invRow}>
+                  <Text style={s.invLabel}>Fecha Emisión</Text>
+                  <Text style={s.invVal}>{new Date().toLocaleString()}</Text>
+                </View>
+                <View style={s.invRow}>
+                  <Text style={s.invLabel}>Cliente</Text>
+                  <Text style={s.invVal}>{cliente.nombres} {cliente.apellidos}</Text>
+                </View>
+                <View style={s.invRow}>
+                  <Text style={s.invLabel}>Correo</Text>
+                  <Text style={s.invVal}>{cliente.correo}</Text>
+                </View>
+                
+                <View style={s.invDivider} />
+                
+                <Text style={s.invSection}>Detalle de Compra</Text>
+                {customDetails.map((det, idx) => (
+                  <View key={idx} style={s.invRow}>
+                    <Text style={s.invItemName}>{det.name}</Text>
+                    <Text style={s.invItemVal}>${det.value.toFixed(2)}</Text>
+                  </View>
+                ))}
+
+                <View style={s.invDivider} />
+                
+                <View style={s.invRow}>
+                  <Text style={s.invLabel}>Subtotal</Text>
+                  <Text style={s.invVal}>${factura.subtotal?.toFixed(2) || subtotal.toFixed(2)}</Text>
+                </View>
+                <View style={s.invRow}>
+                  <Text style={s.invLabel}>IVA (15%)</Text>
+                  <Text style={s.invVal}>${factura.iva?.toFixed(2) || iva.toFixed(2)}</Text>
+                </View>
+                <View style={s.invRow}>
+                  <Text style={s.totalLabel}>Total Pagado</Text>
+                  <Text style={s.totalValue}>${factura.total?.toFixed(2) || total.toFixed(2)} USD</Text>
                 </View>
               </View>
-              <View style={s.field}>
-                <Text style={s.label}>Rango de Días</Text>
-                <View style={s.pickerWrap}>
-                  <TextInput style={s.textInp} value={`${rangoDias} días`} editable={false} />
-                  <ScrollView style={s.dropdownScroll} nestedScrollEnabled>
-                    {[1, 3, 7, 15].map(d => (
-                      <TouchableOpacity key={d} style={s.dropdownItem} onPress={() => setRangoDias(d as any)}>
-                        <Text style={s.dropdownText}>{d} días</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
+
+              <View style={[s.invActions, { flexDirection: isWide ? 'row' : 'column-reverse' }]}>
+                <TouchableOpacity style={[s.btnSecondary, { flex: isWide ? 1 : undefined }]} onPress={handleCerrarFactura}>
+                  <Text style={s.btnSecondaryText}>Volver al listado</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[s.btnPrimary, { flex: isWide ? 1.5 : undefined }]} onPress={() => router.push('/profile')}>
+                  <Text style={s.btnPrimaryText}>Ir a mis reservas</Text>
+                </TouchableOpacity>
               </View>
             </View>
+          ) : mostrarPago ? (
+            <PaymentHall
+              subtotal={subtotal}
+              iva={iva}
+              total={total}
+              ivaLabel="15.0%"
+              itemName={detalle.nombre}
+              customDetails={customDetails}
+              initialNombre={`${cliente.nombres} ${cliente.apellidos}`}
+              initialEmail={cliente.correo}
+              initialTelefono={cliente.telefono}
+              onPagoExitoso={handlePagoExitoso}
+              onCancel={() => setMostrarPago(false)}
+              buttonLabel="Confirmar Pago de Experiencia"
+            />
+          ) : (
+            <View style={{ gap: Spacing.md }}>
+              {/* Breadcrumb */}
+              <View style={s.breadcrumb}>
+                <TouchableOpacity onPress={() => router.push('/atracciones' as any)}>
+                  <Text style={s.breadcrumbLink}>Atracciones</Text>
+                </TouchableOpacity>
+                <Text style={s.breadcrumbSep}> › </Text>
+                <TouchableOpacity onPress={() => router.back()}>
+                  <Text style={s.breadcrumbLink} numberOfLines={1}>{detalle.nombre}</Text>
+                </TouchableOpacity>
+                <Text style={s.breadcrumbSep}> › </Text>
+                <Text style={s.breadcrumbText}>Completar reserva</Text>
+              </View>
 
-            {/* Horarios List */}
-            {horariosLoading ? (
-              <ActivityIndicator size="small" color={Colors.titulo} style={{ marginVertical: 12 }} />
-            ) : visibleHorarios.length === 0 ? (
-              <Text style={s.emptyText}>No hay horarios disponibles en este rango.</Text>
-            ) : (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.horariosGrid}>
-                {visibleHorarios.map(h => (
-                  <TouchableOpacity
-                    key={h.hor_guid}
-                    style={[s.horarioChip, horarioSeleccionado?.hor_guid === h.hor_guid && s.horarioChipOn]}
-                    onPress={() => handleSelectHorario(h)}
+              {/* Steps Indicator */}
+              <View style={s.stepperRow}>
+                <View style={[s.step, s.stepDone]}>
+                  <Ionicons name="checkmark" size={14} color="#fff" />
+                </View>
+                <View style={[s.stepLine, s.stepLineDone]} />
+                <View style={[s.step, s.stepActive]}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#fff' }}>2</Text>
+                </View>
+                <View style={s.stepLine} />
+                <View style={s.step}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.subtitulo }}>3</Text>
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: Spacing.lg, paddingHorizontal: 4 }}>
+                {['Atracción', 'Fecha y tickets', 'Confirmación'].map((lbl, i) => (
+                  <Text
+                    key={i}
+                    style={{
+                      fontSize: 10,
+                      color: i === 1 ? Colors.titulo : Colors.subtitulo,
+                      fontWeight: i === 1 ? '700' : '400',
+                      flex: 1,
+                      textAlign: i === 1 ? 'center' : i === 0 ? 'left' : 'right',
+                    }}
                   >
-                    <Text style={[s.horDate, horarioSeleccionado?.hor_guid === h.hor_guid && { color: '#fff' }]}>{h.fecha}</Text>
-                    <Text style={[s.horTime, horarioSeleccionado?.hor_guid === h.hor_guid && { color: '#fff' }]}>{h.hora_inicio.substring(0, 5)} - {h.hora_fin.substring(0, 5)}</Text>
-                    <Text style={[s.horCupos, horarioSeleccionado?.hor_guid === h.hor_guid && { color: '#fff' }]}>{h.cupos} cupos</Text>
-                  </TouchableOpacity>
+                    {lbl}
+                  </Text>
                 ))}
-              </ScrollView>
-            )}
+              </View>
 
-            {/* Step 2: Tickets list */}
-            {horarioSeleccionado && (
-              <View style={{ gap: Spacing.md, marginTop: Spacing.sm }}>
-                <Text style={s.sectionTitle}>2. Elige tus Tickets</Text>
-                {ticketsLoading ? (
-                  <ActivityIndicator size="small" color={Colors.titulo} />
-                ) : tickets.length === 0 ? (
-                  <Text style={s.emptyText}>No se encontraron tipos de tickets para este horario.</Text>
-                ) : (
-                  <View style={s.ticketsList}>
-                    {tickets.map(t => {
-                      const count = cantidades[t.tck_guid] ?? 0;
-                      return (
-                        <View key={t.tck_guid} style={s.ticketRow}>
-                          <View style={{ flex: 1 }}>
-                            <Text style={s.ticketType}>{t.tipo}</Text>
-                            <Text style={s.ticketPrice}>${t.precio.toFixed(2)} {t.moneda}</Text>
+              <Text style={s.atrHeaderName}>{detalle.nombre}</Text>
+
+              {/* Responsive columns grid */}
+              <View style={[s.layout, { flexDirection: isWide ? 'row' : 'column', gap: Spacing.lg }]}>
+                {/* Main Column */}
+                <View style={{ flex: isWide ? 2 : undefined, gap: Spacing.md, width: '100%' }}>
+                  {/* 1. Selecciona Fecha y Horario */}
+                  <View style={s.sectionCard}>
+                    <View style={s.sectionHeader}>
+                      <Ionicons name="calendar-outline" size={18} color={Colors.titulo} />
+                      <Text style={s.sectionTitle}>1. Selecciona Fecha y Horario</Text>
+                    </View>
+                    
+                    <View style={[s.row, { flexDirection: 'row', gap: Spacing.md }]}>
+                      <View style={s.field}>
+                        <Text style={s.label}>Fecha Inicio Consulta</Text>
+                        <TouchableOpacity
+                          style={s.inputWrap}
+                          onPress={() => setShowDatePicker(true)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="calendar-outline" size={16} color={Colors.extra2} style={{ marginRight: 6 }} />
+                          <Text style={[s.textInp, { color: fechaInicio ? Colors.extra1 : 'rgba(96,98,86,0.5)', textAlignVertical: 'center', lineHeight: Platform.OS === 'web' ? 38 : undefined }]}>
+                            {fechaInicio || 'YYYY-MM-DD'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    <View style={{ marginTop: Spacing.sm }}>
+                      <Text style={s.label}>Rango de Días</Text>
+                      <View style={s.chipsRow}>
+                        {([1, 3, 7, 15] as const).map(d => (
+                          <TouchableOpacity
+                            key={d}
+                            style={[s.chip, rangoDias === d && s.chipActive]}
+                            onPress={() => setRangoDias(d)}
+                          >
+                            <Text style={[s.chipText, rangoDias === d && s.chipTextActive]}>
+                              {d === 1 ? 'Solo ese día' : `Próximos ${d} días`}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+
+                    {/* Horarios List */}
+                    <View style={{ marginTop: Spacing.sm }}>
+                      <Text style={[s.label, { marginBottom: 6 }]}>Horarios Disponibles</Text>
+                      {horariosLoading ? (
+                        <ActivityIndicator size="small" color={Colors.titulo} style={{ marginVertical: 12 }} />
+                      ) : visibleHorarios.length === 0 ? (
+                        <Text style={s.emptyText}>No hay horarios disponibles en este rango.</Text>
+                      ) : (
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.horariosGrid}>
+                          {visibleHorarios.map(h => (
+                            <TouchableOpacity
+                              key={h.hor_guid}
+                              style={[s.horarioChip, horarioSeleccionado?.hor_guid === h.hor_guid && s.horarioChipOn]}
+                              onPress={() => handleSelectHorario(h)}
+                            >
+                              <Text style={[s.horDate, horarioSeleccionado?.hor_guid === h.hor_guid && { color: '#fff' }]}>{h.fecha}</Text>
+                              <Text style={[s.horTime, horarioSeleccionado?.hor_guid === h.hor_guid && { color: '#fff' }]}>
+                                <Ionicons name="time-outline" size={11} /> {h.hora_inicio.substring(0, 5)} - {h.hora_fin.substring(0, 5)}
+                              </Text>
+                              <Text style={[s.horCupos, horarioSeleccionado?.hor_guid === h.hor_guid && { color: '#fff' }]}>
+                                <Ionicons name="ticket-outline" size={10} /> {h.cupos} cupos
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* 2. Elige tus Tickets */}
+                  <View style={s.sectionCard}>
+                    <View style={s.sectionHeader}>
+                      <Ionicons name="ticket-outline" size={18} color={Colors.titulo} />
+                      <Text style={s.sectionTitle}>2. Elige tus Tickets</Text>
+                    </View>
+                    {!horarioSeleccionado ? (
+                      <Text style={s.emptyText}>Selecciona primero un horario para ver los tickets disponibles.</Text>
+                    ) : ticketsLoading ? (
+                      <ActivityIndicator size="small" color={Colors.titulo} style={{ marginVertical: 12 }} />
+                    ) : tickets.length === 0 ? (
+                      <Text style={s.emptyText}>No se encontraron tipos de tickets para este horario.</Text>
+                    ) : (
+                      <View style={s.ticketsList}>
+                        {tickets.map(t => {
+                          const count = cantidades[t.tck_guid] ?? 0;
+                          const maxCupos = horarioSeleccionado?.cupos ?? 0;
+                          const totalSelected = Object.values(cantidades).reduce((sum, c) => sum + c, 0);
+
+                          return (
+                            <View key={t.tck_guid} style={s.ticketRow}>
+                              <View style={{ flex: 1 }}>
+                                <Text style={s.ticketType}>{t.tipo}</Text>
+                                <Text style={s.ticketPrice}>${t.precio.toFixed(2)} {t.moneda}</Text>
+                              </View>
+                              <View style={s.counter}>
+                                <TouchableOpacity
+                                  style={s.counterBtn}
+                                  onPress={() => setCantidades({ ...cantidades, [t.tck_guid]: Math.max(0, count - 1) })}
+                                  disabled={count <= 0}
+                                >
+                                  <Ionicons name="remove" size={14} color={count <= 0 ? Colors.textMuted : Colors.titulo} />
+                                </TouchableOpacity>
+                                <Text style={s.counterText}>{count}</Text>
+                                <TouchableOpacity
+                                  style={s.counterBtn}
+                                  onPress={() => setCantidades({ ...cantidades, [t.tck_guid]: count + 1 })}
+                                  disabled={totalSelected >= maxCupos}
+                                >
+                                  <Ionicons name="add" size={14} color={totalSelected >= maxCupos ? Colors.textMuted : Colors.titulo} />
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    )}
+                  </View>
+
+                  {/* 3. Datos del Visitante */}
+                  <View style={s.sectionCard}>
+                    <View style={s.sectionHeader}>
+                      <Ionicons name="person-outline" size={18} color={Colors.titulo} />
+                      <Text style={s.sectionTitle}>3. Datos del Visitante</Text>
+                    </View>
+                    
+                    <View style={s.formGrid}>
+                      <View style={[s.row, { flexDirection: isWide ? 'row' : 'column', gap: Spacing.md }]}>
+                        <View style={s.field}>
+                          <Text style={s.label}>Nombres *</Text>
+                          <View style={[s.inputWrap, errCliente.nombres && s.inputWrapError]}>
+                            <TextInput style={s.textInp} value={cliente.nombres} onChangeText={v => setCliente({ ...cliente, nombres: v })} placeholder="Nombres" />
                           </View>
-                          <View style={s.counter}>
-                            <TouchableOpacity style={s.counterBtn} onPress={() => setCantidades({ ...cantidades, [t.tck_guid]: Math.max(0, count - 1) })}>
-                              <Ionicons name="remove" size={14} color={Colors.titulo} />
+                          {errCliente.nombres && <Text style={s.fieldError}>{errCliente.nombres}</Text>}
+                        </View>
+                        <View style={s.field}>
+                          <Text style={s.label}>Apellidos *</Text>
+                          <View style={[s.inputWrap, errCliente.apellidos && s.inputWrapError]}>
+                            <TextInput style={s.textInp} value={cliente.apellidos} onChangeText={v => setCliente({ ...cliente, apellidos: v })} placeholder="Apellidos" />
+                          </View>
+                          {errCliente.apellidos && <Text style={s.fieldError}>{errCliente.apellidos}</Text>}
+                        </View>
+                      </View>
+
+                      <View style={[s.row, { flexDirection: isWide ? 'row' : 'column', gap: Spacing.md, zIndex: showTipoDocDropdown ? 15 : 1 }]}>
+                        <View style={[s.field, { zIndex: showTipoDocDropdown ? 30 : 1 }]}>
+                          <Text style={s.label}>Tipo Identificación</Text>
+                          <View style={s.dropdownContainer}>
+                            <TouchableOpacity
+                              style={s.pickerWrap}
+                              onPress={() => setShowTipoDocDropdown(!showTipoDocDropdown)}
+                              activeOpacity={0.8}
+                            >
+                              <Text style={s.pickerText}>{cliente.tipo_identificacion === 'CEDULA' ? 'Cédula' : 'Pasaporte'}</Text>
+                              <Ionicons name={showTipoDocDropdown ? "chevron-up" : "chevron-down"} size={16} color={Colors.extra1} />
                             </TouchableOpacity>
-                            <Text style={s.counterText}>{count}</Text>
-                            <TouchableOpacity style={s.counterBtn} onPress={() => setCantidades({ ...cantidades, [t.tck_guid]: count + 1 })}>
-                              <Ionicons name="add" size={14} color={Colors.titulo} />
-                            </TouchableOpacity>
+                            {showTipoDocDropdown && (
+                              <>
+                                <Pressable style={s.dropdownOverlay} onPress={() => setShowTipoDocDropdown(false)} />
+                                <ScrollView style={s.dropdownScroll} nestedScrollEnabled>
+                                  <TouchableOpacity
+                                    style={s.dropdownItem}
+                                    onPress={() => {
+                                      setCliente({ ...cliente, tipo_identificacion: 'CEDULA' });
+                                      setShowTipoDocDropdown(false);
+                                    }}
+                                  >
+                                    <Text style={s.dropdownText}>Cédula</Text>
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    style={s.dropdownItem}
+                                    onPress={() => {
+                                      setCliente({ ...cliente, tipo_identificacion: 'PASAPORTE' });
+                                      setShowTipoDocDropdown(false);
+                                    }}
+                                  >
+                                    <Text style={s.dropdownText}>Pasaporte</Text>
+                                  </TouchableOpacity>
+                                </ScrollView>
+                              </>
+                            )}
                           </View>
                         </View>
-                      );
-                    })}
-                  </View>
-                )}
-              </View>
-            )}
+                        <View style={s.field}>
+                          <Text style={s.label}>Número Identificación *</Text>
+                          <View style={[s.inputWrap, errCliente.numero_identificacion && s.inputWrapError]}>
+                            <TextInput style={s.textInp} value={cliente.numero_identificacion} onChangeText={v => setCliente({ ...cliente, numero_identificacion: v })} placeholder="Número Identificación" />
+                          </View>
+                          {errCliente.numero_identificacion && <Text style={s.fieldError}>{errCliente.numero_identificacion}</Text>}
+                        </View>
+                      </View>
 
-            {/* Step 3: Visitor details */}
-            <Text style={s.sectionTitle}>3. Datos del Visitante</Text>
-            <View style={s.formGrid}>
-              <View style={s.row}>
-                <View style={s.field}>
-                  <Text style={s.label}>Nombres *</Text>
-                  <View style={[s.inputWrap, errCliente.nombres && s.inputWrapError]}>
-                    <TextInput style={s.textInp} value={cliente.nombres} onChangeText={v => setCliente({ ...cliente, nombres: v })} placeholder="Nombres" />
-                  </View>
-                </View>
-                <View style={s.field}>
-                  <Text style={s.label}>Apellidos *</Text>
-                  <View style={[s.inputWrap, errCliente.apellidos && s.inputWrapError]}>
-                    <TextInput style={s.textInp} value={cliente.apellidos} onChangeText={v => setCliente({ ...cliente, apellidos: v })} placeholder="Apellidos" />
-                  </View>
-                </View>
-              </View>
+                      <View style={[s.row, { flexDirection: isWide ? 'row' : 'column', gap: Spacing.md }]}>
+                        <View style={s.field}>
+                          <Text style={s.label}>Correo Electrónico *</Text>
+                          <View style={[s.inputWrap, errCliente.correo && s.inputWrapError]}>
+                            <TextInput style={s.textInp} value={cliente.correo} onChangeText={v => setCliente({ ...cliente, correo: v })} keyboardType="email-address" autoCapitalize="none" placeholder="correo@ejemplo.com" />
+                          </View>
+                          {errCliente.correo && <Text style={s.fieldError}>{errCliente.correo}</Text>}
+                        </View>
+                        <View style={s.field}>
+                          <Text style={s.label}>Teléfono *</Text>
+                          <View style={[s.inputWrap, errCliente.telefono && s.inputWrapError]}>
+                            <TextInput style={s.textInp} value={cliente.telefono} onChangeText={v => setCliente({ ...cliente, telefono: v })} keyboardType="phone-pad" placeholder="Teléfono" />
+                          </View>
+                          {errCliente.telefono && <Text style={s.fieldError}>{errCliente.telefono}</Text>}
+                        </View>
+                      </View>
 
-              <View style={s.row}>
-                <View style={s.field}>
-                  <Text style={s.label}>Identificación *</Text>
-                  <View style={[s.inputWrap, errCliente.numero_identificacion && s.inputWrapError]}>
-                    <TextInput style={s.textInp} value={cliente.numero_identificacion} onChangeText={v => setCliente({ ...cliente, numero_identificacion: v })} placeholder="Identificación" />
+                      <View style={s.field}>
+                        <Text style={s.label}>Dirección (opcional)</Text>
+                        <View style={s.inputWrap}>
+                          <TextInput style={s.textInp} value={cliente.direccion} onChangeText={v => setCliente({ ...cliente, direccion: v })} placeholder="Dirección" />
+                        </View>
+                      </View>
+                    </View>
                   </View>
                 </View>
-                <View style={s.field}>
-                  <Text style={s.label}>Tipo Identificación</Text>
-                  <View style={s.pickerWrap}>
-                    <TextInput style={s.textInp} value={cliente.tipo_identificacion} editable={false} />
-                    <ScrollView style={s.dropdownScroll} nestedScrollEnabled>
-                      <TouchableOpacity style={s.dropdownItem} onPress={() => setCliente({ ...cliente, tipo_identificacion: 'CEDULA' })}>
-                        <Text style={s.dropdownText}>CEDULA</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={s.dropdownItem} onPress={() => setCliente({ ...cliente, tipo_identificacion: 'PASAPORTE' })}>
-                        <Text style={s.dropdownText}>PASAPORTE</Text>
-                      </TouchableOpacity>
-                    </ScrollView>
-                  </View>
-                </View>
-              </View>
 
-              <View style={s.row}>
-                <View style={s.field}>
-                  <Text style={s.label}>Correo Electrónico *</Text>
-                  <View style={[s.inputWrap, errCliente.correo && s.inputWrapError]}>
-                    <TextInput style={s.textInp} value={cliente.correo} onChangeText={v => setCliente({ ...cliente, correo: v })} placeholder="correo@ejemplo.com" />
-                  </View>
-                </View>
-                <View style={s.field}>
-                  <Text style={s.label}>Teléfono *</Text>
-                  <View style={[s.inputWrap, errCliente.telefono && s.inputWrapError]}>
-                    <TextInput style={s.textInp} value={cliente.telefono} onChangeText={v => setCliente({ ...cliente, telefono: v })} placeholder="Teléfono" />
-                  </View>
-                </View>
-              </View>
+                {/* Sidebar Column */}
+                <View style={{ flex: isWide ? 1 : undefined, width: '100%', gap: Spacing.md }}>
+                  <View style={s.sidebarCard}>
+                    {/* Attraction header in sidebar */}
+                    <View style={s.sbAttr}>
+                      <Image source={{ uri: detalle.imagen_principal || 'https://images.unsplash.com/photo-1533105079780-92b9be482077?w=800&q=80' }} style={s.sbAttrImg} resizeMode="cover" />
+                      <View style={{ flex: 1, gap: 4 }}>
+                        <Text style={s.sbAttrName}>{detalle.nombre}</Text>
+                        <View style={s.sbAttrLoc}>
+                          <Ionicons name="location-outline" size={13} color={Colors.extra2} />
+                          <Text style={s.sbAttrLocText} numberOfLines={1}>{detalle.ciudad}, {detalle.pais}</Text>
+                        </View>
+                        <View style={s.sbAttrMeta}>
+                          <Ionicons name="time-outline" size={13} color={Colors.subtitulo} />
+                          <Text style={s.sbAttrMetaText}>{formatDuration(detalle.duracion_minutos || 0)}</Text>
+                        </View>
+                      </View>
+                    </View>
 
-              <View style={s.field}>
-                <Text style={s.label}>Dirección (Opcional)</Text>
-                <View style={s.inputWrap}>
-                  <TextInput style={s.textInp} value={cliente.direccion} onChangeText={v => setCliente({ ...cliente, direccion: v })} placeholder="Dirección de residencia" />
+                    <View style={s.sbDivider} />
+
+                    {/* Visit details */}
+                    <View style={s.sbRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Ionicons name="calendar-outline" size={16} color={Colors.extra2} />
+                        <Text style={s.sbLabelKey}>Fecha de visita</Text>
+                      </View>
+                      <Text style={s.sbValValue}>{fechaInicio || '—'}</Text>
+                    </View>
+
+                    <View style={s.sbRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Ionicons name="time-outline" size={16} color={Colors.extra2} />
+                        <Text style={s.sbLabelKey}>Horario</Text>
+                      </View>
+                      <Text style={s.sbValValue}>
+                        {horarioSeleccionado ? `${horarioSeleccionado.hora_inicio.substring(0, 5)} - ${horarioSeleccionado.hora_fin.substring(0, 5)}` : '—'}
+                      </Text>
+                    </View>
+
+                    <View style={s.sbDivider} />
+
+                    {/* Tickets Breakdown */}
+                    <View style={{ gap: Spacing.xs }}>
+                      <Text style={s.sbTicketsTitle}>Tickets</Text>
+                      {Object.values(cantidades).every(c => c === 0) ? (
+                        <Text style={s.sbTicketsEmpty}>Aún no seleccionas tickets.</Text>
+                      ) : (
+                        tickets.map(t => {
+                          const count = cantidades[t.tck_guid] ?? 0;
+                          if (count <= 0) return null;
+                          return (
+                            <View key={t.tck_guid} style={s.sbTicketLine}>
+                              <Text style={s.sbTicketLabel}>{count} × {t.tipo}</Text>
+                              <Text style={s.sbTicketVal}>${(t.precio * count).toFixed(2)}</Text>
+                            </View>
+                          );
+                        })
+                      )}
+                    </View>
+
+                    <View style={s.sbDivider} />
+
+                    {/* Pricing Breakdown */}
+                    <View style={{ gap: 6 }}>
+                      <View style={s.sbPriceRow}>
+                        <View>
+                          <Text style={s.sbTotalLabel}>Subtotal estimado</Text>
+                          <Text style={s.sbTotalHint}>No incluye impuestos finales.</Text>
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={s.sbTotalVal}>${subtotal.toFixed(2)} <Text style={{ fontSize: 11, fontWeight: '500', color: Colors.subtitulo }}>USD</Text></Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* CTA Book Button */}
+                    <TouchableOpacity
+                      style={[s.btnPrimary, { width: '100%', marginTop: Spacing.sm }, !puedeReservar && { opacity: 0.55 }]}
+                      onPress={handleReservarClick}
+                      disabled={!puedeReservar}
+                    >
+                      <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
+                      <Text style={s.btnPrimaryText}>Reservar ahora</Text>
+                    </TouchableOpacity>
+
+                    {/* Secondary Back Button */}
+                    <TouchableOpacity
+                      style={[s.btnSecondary, { width: '100%', marginTop: Spacing.xs }]}
+                      onPress={() => router.back()}
+                    >
+                      <Text style={s.btnSecondaryText}>Cancelar</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
             </View>
-
-            {/* Summary details */}
-            {totalTickets > 0 && (
-              <View style={s.summaryBox}>
-                <Text style={s.summaryTitle}>Resumen Estimado</Text>
-                <View style={s.summaryRow}>
-                  <Text style={s.summaryLabel}>Subtotal</Text>
-                  <Text style={s.summaryValue}>${subtotal.toFixed(2)}</Text>
-                </View>
-                <View style={s.summaryRow}>
-                  <Text style={s.summaryLabel}>IVA (15%)</Text>
-                  <Text style={s.summaryValue}>${iva.toFixed(2)}</Text>
-                </View>
-                <View style={s.summaryDivider} />
-                <View style={s.summaryRow}>
-                  <Text style={s.totalLabel}>Total</Text>
-                  <Text style={s.totalValue}>${total.toFixed(2)}</Text>
-                </View>
-              </View>
-            )}
-
-            {/* Action buttons */}
-            <View style={s.actions}>
-              <TouchableOpacity style={s.btnSecondary} onPress={() => router.back()}>
-                <Text style={s.btnSecondaryText}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={s.btnPrimary} onPress={handleReservarClick}>
-                <Text style={s.btnPrimaryText}>Ir a Pagar</Text>
-                <Ionicons name="arrow-forward" size={16} color="#fff" />
-              </TouchableOpacity>
-            </View>
-          </View>
+          )}
         </View>
         <Footer />
       </ScrollView>
-
-      {/* Payment Overlay Modal */}
-      {mostrarPago && (
-        <View style={s.paymentOverlay}>
-          <PaymentHall
-            subtotal={subtotal}
-            iva={iva}
-            total={total}
-            ivaLabel="15.0%"
-            itemName={detalle.nombre}
-            customDetails={customDetails}
-            initialNombre={`${cliente.nombres} ${cliente.apellidos}`}
-            initialEmail={cliente.correo}
-            initialTelefono={cliente.telefono}
-            onPagoExitoso={handlePagoExitoso}
-            onCancel={() => setMostrarPago(false)}
-            buttonLabel="Confirmar Pago de Experiencia"
-          />
-        </View>
-      )}
-
-      {/* Invoice Modal (Factura) */}
-      {factura && (
-        <View style={s.invoiceOverlay}>
-          <View style={s.invoiceCard}>
-            <View style={s.invHeader}>
-              <Ionicons name="checkmark-circle" size={36} color={Colors.success} />
-              <Text style={s.invTitle}>¡Pago Completado Exitosamente!</Text>
-              <Text style={s.invSub}>Factura #{factura.fact_numero || `FAC-${id}`}</Text>
-            </View>
-
-            <View style={s.invBody}>
-              <View style={s.invRow}>
-                <Text style={s.invLabel}>Fecha Emisión</Text>
-                <Text style={s.invVal}>{new Date().toLocaleString()}</Text>
-              </View>
-              <View style={s.invRow}>
-                <Text style={s.invLabel}>Cliente</Text>
-                <Text style={s.invVal}>{cliente.nombres} {cliente.apellidos}</Text>
-              </View>
-              <View style={s.invRow}>
-                <Text style={s.invLabel}>Correo</Text>
-                <Text style={s.invVal}>{cliente.correo}</Text>
-              </View>
-              
-              <View style={s.invDivider} />
-              
-              <Text style={s.invSection}>Detalle de Compra</Text>
-              {customDetails.map((det, idx) => (
-                <View key={idx} style={s.invRow}>
-                  <Text style={s.invItemName}>{det.name}</Text>
-                  <Text style={s.invItemVal}>${det.value.toFixed(2)}</Text>
-                </View>
-              ))}
-
-              <View style={s.invDivider} />
-              
-              <View style={s.invRow}>
-                <Text style={s.invLabel}>Subtotal</Text>
-                <Text style={s.invVal}>${factura.subtotal?.toFixed(2) || subtotal.toFixed(2)}</Text>
-              </View>
-              <View style={s.invRow}>
-                <Text style={s.invLabel}>IVA (15%)</Text>
-                <Text style={s.invVal}>${factura.iva?.toFixed(2) || iva.toFixed(2)}</Text>
-              </View>
-              <View style={s.invRow}>
-                <Text style={s.totalLabel}>Total Pagado</Text>
-                <Text style={s.totalValue}>${factura.total?.toFixed(2) || total.toFixed(2)} USD</Text>
-              </View>
-            </View>
-
-            <View style={s.invActions}>
-              <TouchableOpacity style={s.btnSecondary} onPress={handleCerrarFactura}>
-                <Text style={s.btnSecondaryText}>Volver al listado</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={s.btnPrimary} onPress={() => router.push('/profile')}>
-                <Text style={s.btnPrimaryText}>Ir a mis reservas</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      )}
+      <CalendarModal
+        visible={showDatePicker}
+        value={fechaInicio}
+        onSelect={setFechaInicio}
+        onClose={() => setShowDatePicker(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -640,7 +852,6 @@ const s = StyleSheet.create({
   btnBackText: { color: '#fff', fontWeight: '700' },
 
   container: {
-    maxWidth: 680,
     width: '100%',
     alignSelf: 'center',
     padding: Spacing.md,
@@ -655,7 +866,7 @@ const s = StyleSheet.create({
     ...Shadow.sm,
   },
   atrHeaderName: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '700',
     color: Colors.titulo,
     textAlign: 'center',
@@ -665,22 +876,236 @@ const s = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: Colors.titulo,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    paddingBottom: Spacing.xs,
-    marginTop: Spacing.xs,
   },
-  row: { flexDirection: Platform.OS === 'web' ? 'row' : 'column', gap: Spacing.md },
+  row: { gap: Spacing.md },
   field: { flex: 1, gap: 4, position: 'relative' },
   label: { fontSize: 10, fontWeight: '700', color: Colors.subtitulo, textTransform: 'uppercase', letterSpacing: 0.5 },
   inputWrap: { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: Colors.accentBorder, borderRadius: BorderRadius.sm, paddingHorizontal: 10, height: 40, backgroundColor: Colors.bg },
   inputWrapError: { borderColor: Colors.error },
   pickerWrap: { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: Colors.accentBorder, borderRadius: BorderRadius.sm, paddingHorizontal: 10, height: 40, backgroundColor: Colors.bg, zIndex: 10 },
-  textInp: { flex: 1, fontSize: 13, color: Colors.extra1 },
-  dropdownScroll: { position: 'absolute', top: 38, left: 0, right: 0, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, maxHeight: 120, zIndex: 100, borderRadius: BorderRadius.sm, ...Shadow.md, display: Platform.OS === 'web' ? 'flex' : 'none' },
+  textInp: { flex: 1, fontSize: 13, color: Colors.extra1, minWidth: 0 },
+  pickerText: { flex: 1, fontSize: 13, color: Colors.extra1, minWidth: 0 },
+  dropdownContainer: { position: 'relative', width: '100%', zIndex: 100 },
+  dropdownScroll: { position: 'absolute', top: 42, left: 0, right: 0, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, maxHeight: 120, zIndex: 100, borderRadius: BorderRadius.sm, ...Shadow.md },
+  dropdownOverlay: {
+    position: Platform.OS === 'web' ? 'fixed' : 'absolute' as any,
+    top: Platform.OS === 'web' ? 0 : -1000,
+    bottom: Platform.OS === 'web' ? 0 : -1000,
+    left: Platform.OS === 'web' ? 0 : -1000,
+    right: Platform.OS === 'web' ? 0 : -1000,
+    zIndex: 90,
+    backgroundColor: 'transparent',
+  },
   dropdownItem: { paddingVertical: 8, paddingHorizontal: Spacing.sm, borderBottomWidth: 1, borderBottomColor: Colors.border },
   dropdownText: { fontSize: 12, color: Colors.extra1 },
   emptyText: { fontSize: 12, color: Colors.subtitulo, fontStyle: 'italic', marginVertical: 8 },
+
+  // Breadcrumb
+  breadcrumb: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.xs,
+    marginBottom: Spacing.xs,
+    flexWrap: 'wrap',
+  },
+  breadcrumbLink: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.titulo,
+  },
+  breadcrumbSep: {
+    fontSize: 12,
+    color: Colors.subtitulo,
+    marginHorizontal: 4,
+  },
+  breadcrumbText: {
+    fontSize: 12,
+    color: Colors.subtitulo,
+  },
+
+  // Stepper
+  stepperRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
+  step: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#d4c9af',
+    backgroundColor: '#fff',
+  },
+  stepDone: { backgroundColor: Colors.titulo, borderColor: Colors.titulo },
+  stepActive: { backgroundColor: Colors.titulo, borderColor: Colors.titulo },
+  stepLine: { flex: 1, height: 2, backgroundColor: '#d4c9af' },
+  stepLineDone: { backgroundColor: Colors.titulo },
+
+  // Grid columns
+  layout: {
+    width: '100%',
+  },
+  sectionCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: Spacing.lg,
+    gap: Spacing.md,
+    ...Shadow.sm,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    paddingBottom: Spacing.xs,
+    marginBottom: Spacing.xs,
+  },
+
+  // Range chips
+  chipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#d4c9af',
+    borderRadius: 20,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  chipActive: {
+    backgroundColor: Colors.titulo,
+    borderColor: Colors.titulo,
+  },
+  chipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.extra1,
+  },
+  chipTextActive: {
+    color: '#fff',
+  },
+
+  // Sidebar Summary Card
+  sidebarCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: Spacing.lg,
+    gap: Spacing.md,
+    ...Shadow.sm,
+  },
+  sbAttr: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+  },
+  sbAttrImg: {
+    width: 84,
+    height: 84,
+    borderRadius: BorderRadius.sm,
+  },
+  sbAttrName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.titulo,
+    lineHeight: 18,
+  },
+  sbAttrLoc: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  sbAttrLocText: {
+    fontSize: 11.5,
+    color: Colors.subtitulo,
+  },
+  sbAttrMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  sbAttrMetaText: {
+    fontSize: 11.5,
+    color: Colors.subtitulo,
+  },
+  sbDivider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginVertical: Spacing.xs,
+  },
+  sbRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  sbLabelKey: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.subtitulo,
+  },
+  sbValValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.extra1,
+  },
+  sbTicketsTitle: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: Colors.subtitulo,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  sbTicketsEmpty: {
+    fontSize: 12,
+    color: Colors.subtitulo,
+    fontStyle: 'italic',
+  },
+  sbTicketLine: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 2,
+  },
+  sbTicketLabel: {
+    fontSize: 12.5,
+    color: Colors.extra1,
+  },
+  sbTicketVal: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: Colors.extra1,
+  },
+  sbPriceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingTop: 4,
+  },
+  sbTotalLabel: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: Colors.titulo,
+  },
+  sbTotalHint: {
+    fontSize: 10.5,
+    color: Colors.subtitulo,
+    fontStyle: 'italic',
+  },
+  sbTotalVal: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: Colors.titulo,
+  },
 
   // Horarios chips
   horariosGrid: { gap: Spacing.sm, paddingVertical: 4 },
@@ -713,6 +1138,12 @@ const s = StyleSheet.create({
 
   // Visitor Form
   formGrid: { gap: Spacing.sm },
+  fieldError: {
+    fontSize: 11,
+    color: Colors.error,
+    fontWeight: '600',
+    marginTop: 2,
+  },
 
   // Summary box
   summaryBox: { backgroundColor: 'rgba(198,177,125,0.08)', borderWidth: 1, borderColor: 'rgba(198,177,125,0.25)', borderRadius: BorderRadius.md, padding: Spacing.md, gap: Spacing.xs, marginTop: Spacing.sm },
@@ -726,9 +1157,9 @@ const s = StyleSheet.create({
 
   // Actions
   actions: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.md },
-  btnSecondary: { flex: 1, paddingVertical: 12, borderRadius: BorderRadius.sm, borderWidth: 1, borderColor: Colors.titulo, alignItems: 'center', justifyContent: 'center' },
+  btnSecondary: { paddingVertical: 12, borderRadius: BorderRadius.sm, borderWidth: 1.5, borderColor: Colors.titulo, alignItems: 'center', justifyContent: 'center' },
   btnSecondaryText: { color: Colors.titulo, fontWeight: '700', fontSize: 13 },
-  btnPrimary: { flex: 1.5, flexDirection: 'row', gap: 6, paddingVertical: 12, borderRadius: BorderRadius.sm, backgroundColor: Colors.titulo, alignItems: 'center', justifyContent: 'center', ...Shadow.sm },
+  btnPrimary: { flexDirection: 'row', gap: 6, paddingVertical: 12, borderRadius: BorderRadius.sm, backgroundColor: Colors.titulo, alignItems: 'center', justifyContent: 'center', ...Shadow.sm },
   btnPrimaryText: { color: '#fff', fontWeight: '700', fontSize: 13 },
 
   // Overlays

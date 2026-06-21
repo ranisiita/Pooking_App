@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Image, ActivityIndicator,
-  Platform, TouchableOpacity, Dimensions,
+  Platform, TouchableOpacity, Dimensions, useWindowDimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -55,6 +55,9 @@ interface AttractionDetail {
 export default function AttractionDetailScreen() {
   const router = useRouter();
   const { id, provider } = useLocalSearchParams<{ id: string; provider: string }>();
+
+  const [containerWidth, setContainerWidth] = useState(0);
+  const isWide = containerWidth >= 850;
 
   const [detalle, setDetalle] = useState<AttractionDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -146,7 +149,7 @@ export default function AttractionDetailScreen() {
       <Navbar />
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
         {/* Detail Hero */}
-        <View style={s.hero}>
+        <View style={[s.hero, !isWide && s.heroMobile]}>
           <Image
             source={{ uri: activeImage || detalle.imagen_principal }}
             style={s.heroImage}
@@ -160,7 +163,9 @@ export default function AttractionDetailScreen() {
                 <Ionicons name="arrow-back" size={16} color="#fff" />
                 <Text style={s.heroBackText}>Volver</Text>
               </TouchableOpacity>
-              <Text style={s.breadcrumbText}>Atracciones  /  {detalle.tipo_nombre}  /  {detalle.nombre}</Text>
+              {isWide && (
+                <Text style={s.breadcrumbText}>Atracciones  /  {detalle.tipo_nombre}  /  {detalle.nombre}</Text>
+              )}
             </View>
 
             <View style={s.heroInfo}>
@@ -168,17 +173,19 @@ export default function AttractionDetailScreen() {
                 <View style={s.badge}><Text style={s.badgeText}>{detalle.tipo_nombre}</Text></View>
                 {detalle.subtipo_nombre && <View style={s.badge}><Text style={s.badgeText}>{detalle.subtipo_nombre}</Text></View>}
                 <View style={[s.badge, detalle.disponibilidad?.disponible ? s.badgeOk : s.badgeWarn]}>
-                  <Text style={[s.badgeText, detalle.disponibilidad?.disponible ? { color: '#fff' } : { color: '#fff' }]}>
+                  <Text style={s.badgeText}>
                     {detalle.disponibilidad?.disponible ? 'Disponible' : 'Sin cupos'}
                   </Text>
                 </View>
               </View>
-              <Text style={s.atrTitle}>{detalle.nombre}</Text>
+              <Text style={[s.atrTitle, !isWide && s.atrTitleMobile]}>{detalle.nombre}</Text>
               <Text style={s.atrSub}>
                 <Ionicons name="location-outline" size={14} color="#fff" />
                 {' '}{detalle.ciudad}, {detalle.pais}
               </Text>
-              <Text style={s.atrSummary} numberOfLines={2}>{detalle.descripcion_corta}</Text>
+              {isWide && (
+                <Text style={s.atrSummary} numberOfLines={2}>{detalle.descripcion_corta}</Text>
+              )}
 
               <View style={s.heroMeta}>
                 <View style={s.metaItem}>
@@ -195,9 +202,12 @@ export default function AttractionDetailScreen() {
         </View>
 
         {/* Body Layout */}
-        <View style={s.bodyLayout}>
+        <View 
+          style={[s.bodyLayout, { flexDirection: isWide ? 'row' : 'column' }]}
+          onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
+        >
           {/* Main Info Left Column */}
-          <View style={s.leftCol}>
+          <View style={[s.leftCol, isWide ? { flex: 2 } : s.leftColMobile]}>
             {/* Description */}
             <View style={s.infoCard}>
               <View style={s.cardHeader}>
@@ -246,12 +256,13 @@ export default function AttractionDetailScreen() {
                 <Text style={s.cardTitle}>Qué incluye la experiencia</Text>
               </View>
 
-              <View style={s.inclusionsGrid}>
+              <View style={[s.inclusionsGrid, { flexDirection: isWide ? 'row' : 'column' }]}>
                 {/* Includes */}
-                <View style={s.inclusionsCol}>
-                  <Text style={[s.inclusionsHeader, { color: Colors.success }]}>
-                    <Ionicons name="checkmark-circle" size={14} color={Colors.success} /> Incluye
-                  </Text>
+                <View style={[s.inclusionsCol, isWide && { flex: 1 }]}>
+                  <View style={s.incHeaderRow}>
+                    <Ionicons name="checkmark-circle" size={14} color={Colors.success} />
+                    <Text style={[s.incHeaderText, { color: Colors.success }]}>Incluye</Text>
+                  </View>
                   {detalle.incluye && detalle.incluye.length > 0 ? (
                     <View style={s.incList}>
                       {detalle.incluye.map((it, idx) => (
@@ -264,10 +275,11 @@ export default function AttractionDetailScreen() {
                 </View>
 
                 {/* Excludes */}
-                <View style={s.inclusionsCol}>
-                  <Text style={[s.inclusionsHeader, { color: Colors.error }]}>
-                    <Ionicons name="close-circle" size={14} color={Colors.error} /> No incluye
-                  </Text>
+                <View style={[s.inclusionsCol, isWide && { flex: 1 }]}>
+                  <View style={s.incHeaderRow}>
+                    <Ionicons name="close-circle" size={14} color={Colors.error} />
+                    <Text style={[s.incHeaderText, { color: Colors.error }]}>No incluye</Text>
+                  </View>
                   {detalle.no_incluye && detalle.no_incluye.length > 0 ? (
                     <View style={s.incList}>
                       {detalle.no_incluye.map((it, idx) => (
@@ -320,15 +332,17 @@ export default function AttractionDetailScreen() {
                 </View>
                 <View style={s.ticketsList}>
                   {detalle.tickets.map(t => (
-                    <View key={t.tck_guid} style={s.ticketRow}>
-                      <View style={s.ticketLeft}>
-                        <Ionicons name="ticket-outline" size={18} color={Colors.titulo} />
-                        <View>
+                    <View key={t.tck_guid} style={[s.ticketRow, !isWide && s.ticketRowMobile, !isWide && { padding: Spacing.md }]}>
+                      <View style={[s.ticketLeft, isWide && { flex: 1 }]}>
+                        <Ionicons name="ticket-outline" size={18} color={Colors.titulo} style={{ marginTop: 2 }} />
+                        <View style={{ flex: 1 }}>
                           <Text style={s.ticketType}>{t.tipo}</Text>
                           <Text style={s.ticketId}>ID: {t.tck_guid}</Text>
                         </View>
                       </View>
-                      <Text style={s.ticketPrice}>${t.precio.toFixed(2)} <Text style={s.ticketCurr}>{t.moneda}</Text></Text>
+                      <Text style={[s.ticketPrice, !isWide && s.ticketPriceMobile]}>
+                        ${t.precio.toFixed(2)} <Text style={s.ticketCurr}>{t.moneda}</Text>
+                      </Text>
                     </View>
                   ))}
                 </View>
@@ -337,7 +351,7 @@ export default function AttractionDetailScreen() {
           </View>
 
           {/* Sticky booking Card Right Column */}
-          <View style={s.rightCol}>
+          <View style={[s.rightCol, isWide ? { flex: 1 } : s.rightColMobile]}>
             <View style={s.stickyCard}>
               <View style={s.stickyPriceBlock}>
                 <Text style={s.stickyPriceLabel}>Desde</Text>
@@ -411,6 +425,12 @@ const s = StyleSheet.create({
     position: 'relative',
     justifyContent: 'flex-end',
   },
+  heroMobile: {
+    minHeight: 240,
+    height: undefined,
+    paddingTop: Spacing.lg + 20,
+    paddingBottom: Spacing.md,
+  },
   heroImage: { ...StyleSheet.absoluteFill, width: '100%', height: '100%' },
   heroOverlay: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.48)' },
   heroContainer: {
@@ -435,30 +455,32 @@ const s = StyleSheet.create({
   heroBackText: { color: '#fff', fontSize: 12, fontWeight: '600' },
   breadcrumbText: { color: 'rgba(255,255,255,0.85)', fontSize: 12 },
   heroInfo: { gap: Spacing.xs },
-  badges: { flexDirection: 'row', gap: Spacing.xs },
+  badges: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs },
   badge: { backgroundColor: 'rgba(255,255,255,0.2)', paddingVertical: 4, paddingHorizontal: 8, borderRadius: BorderRadius.sm },
   badgeOk: { backgroundColor: Colors.success },
   badgeWarn: { backgroundColor: Colors.error },
   badgeText: { color: '#fff', fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
   atrTitle: { fontSize: 26, fontWeight: '700', color: '#fff' },
+  atrTitleMobile: { fontSize: 20 },
   atrSub: { fontSize: 13, color: 'rgba(255,255,255,0.9)' },
   atrSummary: { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
-  heroMeta: { flexDirection: 'row', gap: Spacing.md, marginTop: Spacing.xs },
+  heroMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.md, marginTop: Spacing.xs },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   metaTextBold: { color: '#fff', fontSize: 12, fontWeight: '700' },
   metaTextNormal: { color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: '400' },
 
   // Body layout
   bodyLayout: {
-    flexDirection: Platform.OS === 'web' ? 'row' : 'column',
     maxWidth: 960,
     width: '100%',
     alignSelf: 'center',
     padding: Spacing.md,
     gap: Spacing.md,
   },
-  leftCol: { flex: 2, gap: Spacing.md },
-  rightCol: { flex: 1, minWidth: 280 },
+  leftCol: { gap: Spacing.md },
+  leftColMobile: { width: '100%' },
+  rightCol: { minWidth: 280 },
+  rightColMobile: { width: '100%', minWidth: 0 },
 
   // Info card styling
   infoCard: {
@@ -484,9 +506,10 @@ const s = StyleSheet.create({
   thumbImage: { width: '100%', height: '100%' },
 
   // Inclusions grid
-  inclusionsGrid: { flexDirection: Platform.OS === 'web' ? 'row' : 'column', gap: Spacing.md },
-  inclusionsCol: { flex: 1, gap: Spacing.xs },
-  inclusionsHeader: { fontSize: 13, fontWeight: '700', flexDirection: 'row', alignItems: 'center', gap: 4 },
+  inclusionsGrid: { gap: Spacing.md },
+  inclusionsCol: { gap: Spacing.xs },
+  incHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: Spacing.xs },
+  incHeaderText: { fontSize: 13, fontWeight: '700' },
   incList: { gap: Spacing.xs },
   incItem: { fontSize: 12, color: Colors.extra1 },
   incEmpty: { fontSize: 11, color: Colors.subtitulo },
@@ -500,10 +523,12 @@ const s = StyleSheet.create({
   // Tickets
   ticketsList: { gap: Spacing.sm },
   ticketRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: Colors.border, borderRadius: BorderRadius.sm, padding: Spacing.sm, backgroundColor: Colors.bg },
+  ticketRowMobile: { flexDirection: 'column', alignItems: 'stretch', gap: 8 },
   ticketLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   ticketType: { fontSize: 13, fontWeight: '700', color: Colors.extra1 },
   ticketId: { fontSize: 10, color: Colors.subtitulo, marginTop: 1 },
   ticketPrice: { fontSize: 14, fontWeight: '700', color: Colors.titulo },
+  ticketPriceMobile: { alignSelf: 'flex-end', fontSize: 15 },
   ticketCurr: { fontSize: 10, fontWeight: '400', color: Colors.subtitulo },
 
   // Sticky Sidebar right

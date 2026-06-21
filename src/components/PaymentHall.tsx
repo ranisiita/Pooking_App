@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, ActivityIndicator, Platform,
+  ScrollView, ActivityIndicator, Platform, useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, BorderRadius, Shadow } from '../constants/theme';
@@ -29,6 +29,9 @@ export interface PaymentHallProps {
 
   // Labels
   buttonLabel?: string;
+
+  // Footer component
+  footer?: React.ReactNode;
 }
 
 interface DatosPersonales { nombre: string; apellidos: string; email: string; telefono: string; }
@@ -80,11 +83,11 @@ const inp = StyleSheet.create({
   wrap: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     borderWidth: 1.5, borderColor: Colors.accentBorder,
-    borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11,
-    backgroundColor: Colors.bg,
+    borderRadius: BorderRadius.sm, paddingHorizontal: 10,
+    height: 40, backgroundColor: Colors.bg,
   },
   wrapError: { borderColor: Colors.error, backgroundColor: Colors.errorLight },
-  input: { flex: 1, fontSize: 15, color: Colors.extra1 },
+  input: { flex: 1, fontSize: 13, color: Colors.extra1, minWidth: 0 },
 });
 
 // ── Main Component ────────────────────────────────────────────────────────────
@@ -92,10 +95,14 @@ export default function PaymentHall({
   subtotal, iva, total, ivaLabel = '15%', itemName = 'Reserva',
   customDetails, initialNombre = '', initialEmail = '', initialTelefono = '',
   onPagoExitoso, onCancel, buttonLabel = 'Pagar de forma segura',
+  footer,
 }: PaymentHallProps) {
   const [paso, setPaso] = useState<1 | 2>(1);
   const [procesando, setProcesando] = useState(false);
   const [detallesExp, setDetallesExp] = useState(false);
+  const { width: windowWidth } = useWindowDimensions();
+  const [containerWidth, setContainerWidth] = useState(0);
+  const isWide = (containerWidth || windowWidth) >= 768;
 
   // Step 1: personal data
   const [datos, setDatos] = useState<DatosPersonales>({
@@ -155,19 +162,24 @@ export default function PaymentHall({
   // ─────────────────────────────────────────────────────────────────────────────
   if (paso === 1) {
     return (
-      <View style={s.modalWrapper}>
+      <ScrollView
+        style={s.modalScroll}
+        contentContainerStyle={[s.modalWrapper, { padding: isWide ? Spacing.lg : Spacing.xs }]}
+        keyboardShouldPersistTaps="handled"
+        onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
+      >
         <View style={s.modalDatos}>
           <Text style={s.modalTitle}>Tus datos</Text>
           <Text style={s.modalDesc}>Revisa tus datos antes de continuar al pago. Modifícalos si es necesario.</Text>
 
           <View style={s.formGrid}>
-            <View style={s.formRow}>
-              <View style={{ flex: 1 }}>
+            <View style={[s.formRow, { flexDirection: isWide ? 'row' : 'column' }]}>
+              <View style={isWide && { flex: 1 }}>
                 <FormField label="Nombre" required error={errDatos.nombre}>
                   <IconInput icon="person-outline" value={datos.nombre} onChangeText={(v: string) => setDatos({...datos, nombre: v})} placeholder="Ingresa tu nombre" hasError={!!errDatos.nombre} />
                 </FormField>
               </View>
-              <View style={{ flex: 1 }}>
+              <View style={isWide && { flex: 1 }}>
                 <FormField label="Apellidos" required error={errDatos.apellidos}>
                   <IconInput icon="id-card-outline" value={datos.apellidos} onChangeText={(v: string) => setDatos({...datos, apellidos: v})} placeholder="Ingresa tus apellidos" hasError={!!errDatos.apellidos} />
                 </FormField>
@@ -182,18 +194,19 @@ export default function PaymentHall({
               <IconInput icon="call-outline" value={datos.telefono} onChangeText={(v: string) => setDatos({...datos, telefono: v.replace(/\D/g, '')})} placeholder="600123456" keyboardType="numeric" hasError={!!errDatos.telefono} />
             </FormField>
 
-            <View style={s.modalActions}>
-              <TouchableOpacity style={s.btnSecondary} onPress={onCancel} activeOpacity={0.8}>
+            <View style={[s.modalActions, { flexDirection: isWide ? 'row' : 'column-reverse' }]}>
+              <TouchableOpacity style={[s.btnSecondary, { flex: isWide ? 1 : undefined }]} onPress={onCancel} activeOpacity={0.8}>
                 <Text style={s.btnSecondaryText}>Cancelar</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={s.btnPrimary} onPress={continuarAlPago} activeOpacity={0.85}>
+              <TouchableOpacity style={[s.btnPrimary, { flex: isWide ? 1 : undefined }]} onPress={continuarAlPago} activeOpacity={0.85}>
                 <Text style={s.btnPrimaryText}>Continuar al pago</Text>
                 <Ionicons name="arrow-forward" size={17} color="#fff" />
               </TouchableOpacity>
             </View>
           </View>
         </View>
-      </View>
+        {footer && <View style={{ width: '100%', alignSelf: 'stretch' }}>{footer}</View>}
+      </ScrollView>
     );
   }
 
@@ -201,112 +214,116 @@ export default function PaymentHall({
   // PASO 2 — HALL DE PAGOS
   // ─────────────────────────────────────────────────────────────────────────────
   return (
-    <ScrollView style={s.modalPago} contentContainerStyle={{ padding: Spacing.xl, gap: Spacing.lg }}>
-      {/* Header */}
-      <View style={s.pagoHeader}>
-        <Text style={s.modalTitle}>Hall de pagos</Text>
-        <TouchableOpacity onPress={onCancel} style={s.closeBtn}>
-          <Ionicons name="close" size={24} color={Colors.subtitulo} />
-        </TouchableOpacity>
-      </View>
-      <Text style={s.modalDesc}>Revisa tus datos y completa la información de tu tarjeta para finalizar la reserva.</Text>
+    <ScrollView 
+      style={s.modalScroll} 
+      contentContainerStyle={[s.modalWrapper, { padding: isWide ? Spacing.lg : Spacing.xs }]}
+      keyboardShouldPersistTaps="handled"
+      onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
+    >
+      <View style={s.modalDatos}>
+        {/* Header */}
+        <View style={s.pagoHeader}>
+          <Text style={s.modalTitle}>Hall de pagos</Text>
+        </View>
+        <Text style={s.modalDesc}>Revisa tus datos y completa la información de tu tarjeta para finalizar la reserva.</Text>
 
-      <View style={[s.pagoContent, Platform.OS === 'web' && s.pagoContentWeb]}>
+        <View style={[s.pagoContent, isWide && s.pagoContentWeb]}>
 
-        {/* Columna izquierda: datos personales + resumen */}
-        <View style={s.pagoSection}>
-          {/* Datos personales */}
-          <View style={s.sectionHeader}>
-            <Text style={s.sectionTitle}>Datos personales</Text>
-            <TouchableOpacity style={s.editBtn} onPress={() => setPaso(1)}>
-              <Ionicons name="pencil-outline" size={14} color={Colors.subtitulo} />
-              <Text style={s.editBtnText}>Editar</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={s.personalData}>
-            <DataItem label="NOMBRE" value={`${datos.nombre} ${datos.apellidos}`} />
-            <DataItem label="EMAIL" value={datos.email} />
-            <DataItem label="TELÉFONO" value={datos.telefono} full />
-          </View>
+          {/* Columna izquierda: datos personales + resumen */}
+          <View style={[s.pagoSection, { flex: isWide ? 1 : undefined }]}>
+            {/* Datos personales */}
+            <View style={s.sectionHeader}>
+              <Text style={s.sectionTitle}>Datos personales</Text>
+              <TouchableOpacity style={s.editBtn} onPress={() => setPaso(1)}>
+                <Ionicons name="pencil-outline" size={14} color={Colors.subtitulo} />
+                <Text style={s.editBtnText}>Editar</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={s.personalData}>
+              <DataItem label="NOMBRE" value={`${datos.nombre} ${datos.apellidos}`} />
+              <DataItem label="EMAIL" value={datos.email} />
+              <DataItem label="TELÉFONO" value={datos.telefono} full />
+            </View>
 
-          {/* Resumen de pago */}
-          <View style={s.paymentSummary}>
-            <TouchableOpacity style={s.summaryRow} onPress={() => setDetallesExp(!detallesExp)}>
-              <View style={s.summaryLabel}>
-                <Ionicons name={detallesExp ? 'chevron-up' : 'chevron-down'} size={16} color={Colors.extra1} />
-                <Text style={s.summaryLabelText}>Subtotal</Text>
-              </View>
-              <Text style={s.summaryValue}>${subtotal.toFixed(2)}</Text>
-            </TouchableOpacity>
+            {/* Resumen de pago */}
+            <View style={s.paymentSummary}>
+              <TouchableOpacity style={s.summaryRow} onPress={() => setDetallesExp(!detallesExp)}>
+                <View style={s.summaryLabel}>
+                  <Ionicons name={detallesExp ? 'chevron-up' : 'chevron-down'} size={16} color={Colors.extra1} />
+                  <Text style={s.summaryLabelText}>Subtotal</Text>
+                </View>
+                <Text style={s.summaryValue}>${subtotal.toFixed(2)}</Text>
+              </TouchableOpacity>
 
-            {detallesExp && (
-              <View style={s.detailsExp}>
-                {customDetails && customDetails.length > 0 ? customDetails.map(d => (
-                  <View key={d.name} style={s.detailRow}>
-                    <Text style={s.detailText}>{d.name}</Text>
-                    <Text style={s.detailText}>${d.value.toFixed(2)}</Text>
-                  </View>
-                )) : (
+              {detallesExp && (
+                <View style={s.detailsExp}>
+                  {customDetails && customDetails.length > 0 ? customDetails.map(d => (
+                    <View key={d.name} style={s.detailRow}>
+                      <Text style={s.detailText}>{d.name}</Text>
+                      <Text style={s.detailText}>${d.value.toFixed(2)}</Text>
+                    </View>
+                  )) : (
+                    <View style={s.detailRow}>
+                      <Text style={s.detailText}>{itemName}</Text>
+                      <Text style={s.detailText}>${subtotal.toFixed(2)}</Text>
+                    </View>
+                  )}
                   <View style={s.detailRow}>
-                    <Text style={s.detailText}>{itemName}</Text>
-                    <Text style={s.detailText}>${subtotal.toFixed(2)}</Text>
+                    <Text style={s.detailText}>IVA ({ivaLabel})</Text>
+                    <Text style={s.detailText}>${iva.toFixed(2)}</Text>
                   </View>
-                )}
-                <View style={s.detailRow}>
-                  <Text style={s.detailText}>IVA ({ivaLabel})</Text>
-                  <Text style={s.detailText}>${iva.toFixed(2)}</Text>
+                </View>
+              )}
+
+              <View style={s.summaryTotal}>
+                <Text style={s.totalLabel}>Total</Text>
+                <Text style={s.totalValue}>${total.toFixed(2)}</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Columna derecha: tarjeta */}
+          <View style={[s.pagoSection, { flex: isWide ? 1 : undefined }]}>
+            <View style={s.payMethodHeader}>
+              <Text style={s.sectionTitle}>Método de pago — Tarjeta</Text>
+              <View style={s.secureBadge}>
+                <Ionicons name="lock-closed-outline" size={13} color={Colors.subtitulo} />
+                <Text style={s.secureBadgeText}>Pago seguro</Text>
+              </View>
+            </View>
+
+            <View style={s.formGrid}>
+              <FormField label="Nombre del titular de la tarjeta" required error={errTarjeta.titular}>
+                <IconInput icon="person-outline" value={tarjeta.titular} onChangeText={(v: string) => setTarjeta({...tarjeta, titular: v})} placeholder="Como aparece en la tarjeta" hasError={!!errTarjeta.titular} />
+              </FormField>
+
+              <FormField label="Número de la tarjeta" required error={errTarjeta.numero}>
+                <IconInput icon="card-outline" value={tarjeta.numero} onChangeText={(v: string) => setTarjeta({...tarjeta, numero: formatNumero(v)})} placeholder="0000 0000 0000 0000" keyboardType="numeric" hasError={!!errTarjeta.numero} maxLength={19} />
+              </FormField>
+
+              <View style={[s.formRow, { flexDirection: isWide ? 'row' : 'column' }]}>
+                <View style={isWide && { flex: 1 }}>
+                  <FormField label="Fecha de caducidad" required error={errTarjeta.expiracion}>
+                    <IconInput icon="calendar-outline" value={tarjeta.expiracion} onChangeText={(v: string) => setTarjeta({...tarjeta, expiracion: formatExp(v)})} placeholder="MM / AA" keyboardType="numeric" hasError={!!errTarjeta.expiracion} maxLength={7} />
+                  </FormField>
+                </View>
+                <View style={isWide && { flex: 1 }}>
+                  <FormField label="CVC" required error={errTarjeta.cvc}>
+                    <IconInput icon="lock-closed-outline" value={tarjeta.cvc} onChangeText={(v: string) => setTarjeta({...tarjeta, cvc: v.replace(/\D/g,'').slice(0,3)})} placeholder="123" keyboardType="numeric" secureTextEntry hasError={!!errTarjeta.cvc} maxLength={3} />
+                  </FormField>
                 </View>
               </View>
-            )}
 
-            <View style={s.summaryTotal}>
-              <Text style={s.totalLabel}>Total</Text>
-              <Text style={s.totalValue}>${total.toFixed(2)}</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Columna derecha: tarjeta */}
-        <View style={s.pagoSection}>
-          <View style={s.payMethodHeader}>
-            <Text style={s.sectionTitle}>Método de pago — Tarjeta</Text>
-            <View style={s.secureBadge}>
-              <Ionicons name="lock-closed-outline" size={13} color={Colors.subtitulo} />
-              <Text style={s.secureBadgeText}>Pago seguro</Text>
-            </View>
-          </View>
-
-          <View style={s.formGrid}>
-            <FormField label="Nombre del titular de la tarjeta" required error={errTarjeta.titular}>
-              <IconInput icon="person-outline" value={tarjeta.titular} onChangeText={(v: string) => setTarjeta({...tarjeta, titular: v})} placeholder="Como aparece en la tarjeta" hasError={!!errTarjeta.titular} />
-            </FormField>
-
-            <FormField label="Número de la tarjeta" required error={errTarjeta.numero}>
-              <IconInput icon="card-outline" value={tarjeta.numero} onChangeText={(v: string) => setTarjeta({...tarjeta, numero: formatNumero(v)})} placeholder="0000 0000 0000 0000" keyboardType="numeric" hasError={!!errTarjeta.numero} maxLength={19} />
-            </FormField>
-
-            <View style={s.formRow}>
-              <View style={{ flex: 1 }}>
-                <FormField label="Fecha de caducidad" required error={errTarjeta.expiracion}>
-                  <IconInput icon="calendar-outline" value={tarjeta.expiracion} onChangeText={(v: string) => setTarjeta({...tarjeta, expiracion: formatExp(v)})} placeholder="MM / AA" keyboardType="numeric" hasError={!!errTarjeta.expiracion} maxLength={7} />
-                </FormField>
+              <View style={[s.modalActions, { flexDirection: isWide ? 'row' : 'column-reverse' }]}>
+                <TouchableOpacity style={[s.btnSecondary, { flex: isWide ? 1 : undefined }]} onPress={onCancel} activeOpacity={0.8}>
+                  <Text style={s.btnSecondaryText}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[s.btnPrimary, { flex: isWide ? 1 : undefined }, procesando && { opacity: 0.6 }]} onPress={pagar} disabled={procesando} activeOpacity={0.85}>
+                  {procesando
+                    ? <><ActivityIndicator size="small" color="#fff" /><Text style={s.btnPrimaryText}>Procesando...</Text></>
+                    : <><Ionicons name="lock-closed" size={16} color="#fff" /><Text style={s.btnPrimaryText}>{buttonLabel}</Text></>}
+                </TouchableOpacity>
               </View>
-              <View style={{ flex: 1 }}>
-                <FormField label="CVC" required error={errTarjeta.cvc}>
-                  <IconInput icon="lock-closed-outline" value={tarjeta.cvc} onChangeText={(v: string) => setTarjeta({...tarjeta, cvc: v.replace(/\D/g,'').slice(0,3)})} placeholder="123" keyboardType="numeric" secureTextEntry hasError={!!errTarjeta.cvc} maxLength={3} />
-                </FormField>
-              </View>
-            </View>
-
-            <View style={s.modalActions}>
-              <TouchableOpacity style={s.btnSecondary} onPress={onCancel} activeOpacity={0.8}>
-                <Text style={s.btnSecondaryText}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[s.btnPrimary, procesando && { opacity: 0.6 }]} onPress={pagar} disabled={procesando} activeOpacity={0.85}>
-                {procesando
-                  ? <><ActivityIndicator size="small" color="#fff" /><Text style={s.btnPrimaryText}>Procesando...</Text></>
-                  : <><Ionicons name="lock-closed" size={16} color="#fff" /><Text style={s.btnPrimaryText}>{buttonLabel}</Text></>}
-              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -322,6 +339,7 @@ export default function PaymentHall({
           </View>
         </View>
       )}
+      {footer && <View style={{ width: '100%', alignSelf: 'stretch' }}>{footer}</View>}
     </ScrollView>
   );
 }
@@ -337,16 +355,18 @@ function DataItem({ label, value, full }: { label: string; value: string; full?:
 
 const s = StyleSheet.create({
   // Paso 1 wrapper
-  modalWrapper: { flex: 1, backgroundColor: Colors.bg, justifyContent: 'center', alignItems: 'center', padding: Spacing.lg },
+  modalScroll: { flex: 1, backgroundColor: Colors.bg },
+  modalWrapper: { flexGrow: 1, backgroundColor: Colors.bg, justifyContent: 'center', alignItems: 'center' },
   modalDatos: {
     backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.lg,
-    borderLeftWidth: 5,
-    borderLeftColor: Colors.titulo,
-    padding: Spacing.xl,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: Spacing.lg,
+    gap: Spacing.md,
     width: '100%',
     maxWidth: 680,
-    ...Shadow.lg,
+    ...Shadow.sm,
   },
   // Paso 2
   modalPago: { flex: 1, backgroundColor: Colors.bg },
@@ -354,23 +374,23 @@ const s = StyleSheet.create({
   closeBtn: { padding: 4 },
   pagoContent: { gap: Spacing.xl },
   pagoContentWeb: { flexDirection: 'row' as any },
-  pagoSection: { flex: 1, gap: Spacing.md },
+  pagoSection: { gap: Spacing.md },
 
   modalTitle: { fontSize: 26, fontWeight: '700', color: Colors.titulo, marginBottom: Spacing.xs },
   modalDesc: { fontSize: 13, color: Colors.subtitulo, lineHeight: 20, marginBottom: Spacing.md },
 
   formGrid: { gap: Spacing.md },
-  formRow: { flexDirection: Platform.OS === 'web' ? 'row' : 'column', gap: Spacing.md },
+  formRow: { gap: Spacing.md },
 
   modalActions: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm },
   btnSecondary: {
-    flex: 1, paddingVertical: 14, borderRadius: BorderRadius.md,
+    paddingVertical: 14, borderRadius: BorderRadius.md,
     backgroundColor: Colors.primaryLight,
     alignItems: 'center', justifyContent: 'center',
   },
   btnSecondaryText: { fontWeight: '600', color: Colors.titulo, fontSize: 14 },
   btnPrimary: {
-    flex: 1, flexDirection: 'row', gap: Spacing.xs, paddingVertical: 14,
+    flexDirection: 'row', gap: Spacing.xs, paddingVertical: 14,
     borderRadius: BorderRadius.md, backgroundColor: Colors.titulo,
     alignItems: 'center', justifyContent: 'center',
     ...Shadow.md,

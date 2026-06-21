@@ -66,14 +66,27 @@ export class AtraccionesService {
     return `${API_GATEWAY_URL}${buildAttractionBasePath(provider)}/reservas`;
   }
 
+  private static normalizeCityParam(city: string | undefined | null): string {
+    if (!city) return '';
+    const trimmed = city.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (trimmed === 'bogota') return 'Bogotá';
+    if (trimmed === 'santiago' || trimmed === 'santiago de chile') return 'Santiago de Chile';
+    if (trimmed === 'quito') return 'Quito';
+    return city.trim().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+  }
+
   // 1. GET /atracciones
   static async getAtracciones(query: any = {}, selector: AttractionProviderSelector = ACTIVE_ATTRACTION_PROVIDER): Promise<any> {
+    const queryCopy = { ...query };
+    if (queryCopy.ciudad) {
+      queryCopy.ciudad = this.normalizeCityParam(queryCopy.ciudad);
+    }
     if (selector === 'todos') {
-      return this.fanoutAtracciones(query);
+      return this.fanoutAtracciones(queryCopy);
     }
     try {
       const params = new URLSearchParams();
-      Object.entries(query).forEach(([k, v]) => {
+      Object.entries(queryCopy).forEach(([k, v]) => {
         if (v !== undefined && v !== null && v !== '') {
           params.set(k, String(v));
         }

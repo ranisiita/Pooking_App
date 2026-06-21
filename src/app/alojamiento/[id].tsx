@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, Image, TouchableOpacity, StyleSheet,
   ScrollView, ActivityIndicator, Platform, useWindowDimensions, Modal, Pressable
@@ -25,8 +25,8 @@ function Stars({ n, size = 14 }: { n: number; size?: number }) {
 export default function LodgingDetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string; provider?: string; llegada?: string; salida?: string; adultos?: string; ninos?: string }>();
-  const { width } = useWindowDimensions();
-  const isWide = width >= 850;
+  const [containerWidth, setContainerWidth] = useState(0);
+  const isWide = containerWidth >= 850;
 
   const [lodging, setLodging] = useState<Lodging | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -179,6 +179,14 @@ export default function LodgingDetailScreen() {
         roomName: selectedRooms.map(sel => `${sel.roomName} (x${sel.habitaciones})`).join(', '),
         precio: String(precioNoche),
         seleccion: JSON.stringify(selectedRooms),
+        // Hotel metadata for the booking sidebar
+        hotelNombre: lodging.nombre,
+        hotelImagen: lodging.imagenes[0] || lodging.imagen,
+        hotelCategoria: String(lodging.categoria),
+        hotelDireccion: lodging.direccion,
+        hotelPrecioDesde: String(lodging.precio),
+        hotelCheckIn: lodging.checkIn,
+        hotelCheckOut: lodging.checkOut,
       }
     });
   };
@@ -234,24 +242,13 @@ export default function LodgingDetailScreen() {
   const images = lodging.imagenes?.length > 0 ? lodging.imagenes : [lodging.imagen];
 
   return (
-    <View style={s.root}>
+    <View style={s.root} onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}>
       <Navbar />
-      
-      {/* Dynamic Subnav bar */}
-      <View style={s.subnav}>
-        {(['info', 'rooms', 'services', 'reviews', 'location'] as const).map(tab => (
-          <TouchableOpacity key={tab} onPress={() => scrollToSection(tab)} style={[s.subnavTab, activeTab === tab && s.subnavTabActive]}>
-            <Text style={[s.subnavText, activeTab === tab && s.subnavTextActive]}>
-              {tab === 'info' ? 'Información' : tab === 'rooms' ? 'Habitaciones' : tab === 'services' ? 'Servicios' : tab === 'reviews' ? 'Valoraciones' : 'Ubicación'}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
 
       <ScrollView ref={scrollRef} contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
 
         {/* Gallery Auto Carousel */}
-        <View style={s.carousel}>
+        <View style={[s.carousel, { height: isWide ? 420 : 250 }]}>
           <Image source={{ uri: images[imgIdx] }} style={s.carouselImg} resizeMode="cover" />
           {images.length > 1 && (
             <>
@@ -276,14 +273,14 @@ export default function LodgingDetailScreen() {
         </View>
 
         {/* Layout content */}
-        <View style={[s.bodyContainer, isWide && s.bodyContainerWide]}>
+        <View style={[s.bodyContainer, { flexDirection: isWide ? 'row' : 'column', padding: isWide ? Spacing.lg : Spacing.md }]}>
           
           {/* Main Column */}
-          <View style={s.mainColumn}>
+          <View style={[s.mainColumn, { width: isWide ? 'auto' : '100%', flex: isWide ? 2 : undefined }]}>
             
             {/* Header info */}
             <View ref={sectionRefs.info} style={s.sectionCard}>
-              <View style={s.headerTop}>
+              <View style={[s.headerTop, { flexDirection: isWide ? 'row' : 'column', alignItems: isWide ? 'flex-start' : 'stretch', gap: Spacing.md }]}>
                 <View style={{ flex: 1 }}>
                   <Text style={s.name}>{lodging.nombre}</Text>
                   <View style={s.starsRow}>
@@ -296,10 +293,12 @@ export default function LodgingDetailScreen() {
                   </View>
                 </View>
                 {lodging.valoracion > 0 && (
-                  <View style={s.ratingBox}>
+                  <View style={[s.ratingBox, !isWide && { alignSelf: 'flex-start', flexDirection: 'row', gap: 8, minWidth: 0, paddingVertical: 6, paddingHorizontal: 12, alignItems: 'center' }]}>
                     <Text style={s.ratingNum}>{lodging.valoracion.toFixed(1)}</Text>
-                    <Text style={s.ratingLabel}>{lodging.ratingTexto}</Text>
-                    <Text style={s.ratingCount}>{lodging.reviewsCount} val.</Text>
+                    <View style={!isWide && { justifyContent: 'center' }}>
+                      <Text style={s.ratingLabel}>{lodging.ratingTexto}</Text>
+                      <Text style={[s.ratingCount, !isWide && { marginTop: 1 }]}>{lodging.reviewsCount} val.</Text>
+                    </View>
                   </View>
                 )}
               </View>
@@ -322,8 +321,8 @@ export default function LodgingDetailScreen() {
                 <Text style={s.emptyText}>No hay habitaciones disponibles para el rango de fechas seleccionado.</Text>
               ) : (
                 rooms.map(room => (
-                  <View key={room.id} style={s.roomCard}>
-                    <View style={s.roomImgContainer}>
+                  <View key={room.id} style={[s.roomCard, { flexDirection: isWide ? 'row' : 'column' }]}>
+                    <View style={[s.roomImgContainer, { width: isWide ? 180 : '100%', height: isWide ? 'auto' : 160 }]}>
                       <Image source={{ uri: room.imagen || lodging.imagen }} style={s.roomImg} />
                       {room.imagenes && room.imagenes.length > 0 && (
                         <View style={s.roomPhotoCount}>
@@ -462,7 +461,7 @@ export default function LodgingDetailScreen() {
           </View>
 
           {/* Booking Sidebar Widget */}
-          <View style={[s.sidebarColumn, isWide && s.sidebarColumnWide]}>
+          <View style={[s.sidebarColumn, { width: isWide ? 'auto' : '100%', flex: isWide ? 1 : undefined, marginLeft: isWide ? Spacing.lg : 0, marginTop: isWide ? 0 : Spacing.md }]}>
             <View style={s.bookingCard}>
               <Text style={s.bcTitle}>Resumen de tu estadía</Text>
               
@@ -574,7 +573,7 @@ export default function LodgingDetailScreen() {
       {configRoom && (
         <Modal visible={!!configRoom} transparent animationType="fade" onRequestClose={() => setConfigRoom(null)}>
           <Pressable style={s.modalOverlay} onPress={() => setConfigRoom(null)}>
-            <Pressable style={[s.modalContent, { width: width > 420 ? 380 : '90%' }]}>
+             <Pressable style={[s.modalContent, { width: containerWidth > 420 ? 380 : '90%' }]}>
               <View style={s.mHeader}>
                 <Text style={s.mTitle} numberOfLines={1}>{configRoom.nombre}</Text>
                 <TouchableOpacity onPress={() => setConfigRoom(null)} style={s.mClose}>
@@ -692,13 +691,13 @@ const s = StyleSheet.create({
   backBtn: { backgroundColor: Colors.titulo, borderRadius: BorderRadius.md, paddingVertical: 12, paddingHorizontal: Spacing.xl },
   backBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 
-  subnav: { flexDirection: 'row', backgroundColor: Colors.surface, borderBottomWidth: 1, borderBottomColor: Colors.border, paddingHorizontal: Spacing.md },
-  subnavTab: { flex: 1, paddingVertical: 14, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  subnav: { backgroundColor: Colors.surface, borderBottomWidth: 1, borderBottomColor: Colors.border, paddingHorizontal: Spacing.md },
+  subnavTab: { paddingVertical: 14, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
   subnavTabActive: { borderBottomColor: Colors.titulo },
   subnavText: { fontSize: 12, color: Colors.subtitulo, fontWeight: '500' },
   subnavTextActive: { color: Colors.titulo, fontWeight: '700' },
 
-  carousel: { position: 'relative', height: Platform.OS === 'web' ? 420 : 250 },
+  carousel: { position: 'relative' },
   carouselImg: { width: '100%', height: '100%' },
   carouselArrow: { position: 'absolute', top: '50%', backgroundColor: 'rgba(70,64,60,0.6)', borderRadius: 20, width: 40, height: 40, alignItems: 'center', justifyContent: 'center', marginTop: -20 },
   carouselLeft: { left: 12 },
@@ -712,7 +711,7 @@ const s = StyleSheet.create({
   bodyContainer: { padding: Spacing.lg, gap: Spacing.lg },
   bodyContainerWide: { flexDirection: 'row', maxWidth: 1100, alignSelf: 'center', width: '100%' },
   
-  mainColumn: { flex: 2, gap: Spacing.lg },
+  mainColumn: { gap: Spacing.lg },
   sectionCard: { backgroundColor: Colors.surface, borderRadius: BorderRadius.lg, borderWidth: 1, borderColor: Colors.border, padding: Spacing.md, ...Shadow.sm },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: Colors.titulo, marginBottom: Spacing.md, fontFamily: 'PlayfairDisplay-Bold' },
   sectionSubTitle: { fontSize: 15, fontWeight: '700', color: Colors.titulo, marginBottom: 6 },
@@ -735,8 +734,8 @@ const s = StyleSheet.create({
 
   emptyText: { fontSize: 13, fontStyle: 'italic', color: Colors.textMuted },
   
-  roomCard: { flexDirection: Platform.OS === 'web' ? 'row' : 'column', borderRadius: BorderRadius.md, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden', marginBottom: Spacing.md, backgroundColor: Colors.surface },
-  roomImgContainer: { position: 'relative', width: Platform.OS === 'web' ? 180 : '100%', height: Platform.OS === 'web' ? 'auto' : 160 },
+  roomCard: { borderRadius: BorderRadius.md, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden', marginBottom: Spacing.md, backgroundColor: Colors.surface },
+  roomImgContainer: { position: 'relative' },
   roomImg: { width: '100%', height: '100%', minHeight: 140 },
   roomPhotoCount: { position: 'absolute', bottom: 6, left: 6, backgroundColor: 'rgba(0,0,0,0.65)', borderRadius: 10, paddingHorizontal: 6, paddingVertical: 3, flexDirection: 'row', alignItems: 'center' },
   roomPhotoCountText: { fontSize: 9, color: '#fff', fontWeight: '600' },
@@ -785,7 +784,7 @@ const s = StyleSheet.create({
   reviewTextRow: { flexDirection: 'row', gap: 6 },
   reviewText: { fontSize: 12, color: Colors.subtitulo, flex: 1, lineHeight: 18 },
 
-  sidebarColumn: { flex: 1, width: '100%' },
+  sidebarColumn: { width: '100%' },
   sidebarColumnWide: { marginLeft: Spacing.lg },
   bookingCard: { backgroundColor: Colors.surface, borderRadius: BorderRadius.lg, borderWidth: 1.5, borderColor: Colors.accentBorder, padding: Spacing.md, ...Shadow.md },
   bcTitle: { fontSize: 16, fontWeight: '700', color: Colors.titulo, marginBottom: Spacing.md, fontFamily: 'PlayfairDisplay-Bold' },

@@ -33,6 +33,16 @@ const SERVICE_ICONS: Record<string, any> = {
 };
 
 function HotelCard({ h, onPress, isWide }: { h: Lodging; onPress: () => void; isWide: boolean }) {
+  const ratingElement = h.reviewsCount > 0 ? (
+    <View style={c.ratingInline}>
+      <Ionicons name="star" size={11} color="#f1c40f" />
+      <Text style={c.ratingInlineText}>
+        <Text style={{ fontWeight: '700', color: Colors.titulo }}>{h.valoracion?.toFixed(1)}</Text>
+        {' '}{h.ratingTexto} ({h.reviewsCount})
+      </Text>
+    </View>
+  ) : null;
+
   return (
     <TouchableOpacity style={[c.card, { flexDirection: isWide ? 'row' : 'column' }]} onPress={onPress} activeOpacity={0.92}>
       {/* Image column */}
@@ -48,7 +58,10 @@ function HotelCard({ h, onPress, isWide }: { h: Lodging; onPress: () => void; is
       <View style={c.info}>
         <View style={c.top}>
           <Text style={c.name} numberOfLines={2}>{h.nombre}</Text>
-          {h.calidad ? <Text style={c.calidad}>{h.calidad}</Text> : null}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, marginTop: 2 }}>
+            {h.calidad ? <Text style={c.calidad}>{h.calidad}</Text> : null}
+            {!isWide && ratingElement}
+          </View>
         </View>
 
         <View style={c.locRow}>
@@ -60,51 +73,70 @@ function HotelCard({ h, onPress, isWide }: { h: Lodging; onPress: () => void; is
 
         {/* Meta chips */}
         <View style={c.meta}>
-          {h.checkIn ? <View style={c.metaItem}><Ionicons name="log-in-outline" size={13} color={Colors.subtitulo} /><Text style={c.metaText}>Check-in <Text style={c.metaBold}>{h.checkIn}</Text></Text></View> : null}
-          {h.checkOut ? <View style={c.metaItem}><Ionicons name="log-out-outline" size={13} color={Colors.subtitulo} /><Text style={c.metaText}>Check-out <Text style={c.metaBold}>{h.checkOut}</Text></Text></View> : null}
+          {isWide && h.checkIn ? <View style={c.metaItem}><Ionicons name="log-in-outline" size={13} color={Colors.subtitulo} /><Text style={c.metaText}>Check-in <Text style={c.metaBold}>{h.checkIn}</Text></Text></View> : null}
+          {isWide && h.checkOut ? <View style={c.metaItem}><Ionicons name="log-out-outline" size={13} color={Colors.subtitulo} /><Text style={c.metaText}>Check-out <Text style={c.metaBold}>{h.checkOut}</Text></Text></View> : null}
           {h.habitacionesDisponibles ? <View style={[c.metaItem, c.metaHighlight]}><Ionicons name="bed-outline" size={13} color={Colors.titulo} /><Text style={[c.metaText, { color: Colors.titulo }]}><Text style={c.metaBold}>{h.habitacionesDisponibles}</Text> hab. disponibles</Text></View> : null}
         </View>
 
         {/* Service chips */}
         <View style={c.chips}>
-          {['Wifi','Desayuno','Piscina','Spa','Restaurante','Gimnasio','Estacionamiento'].filter(sv => h.servicios?.includes(sv)).map(sv => (
-            <View key={sv} style={c.chip}>
-              <Ionicons name={SERVICE_ICONS[sv] || 'checkmark-circle-outline'} size={12} color={Colors.titulo} />
-              <Text style={c.chipText}>{sv}</Text>
-            </View>
-          ))}
+          {['Wifi','Desayuno','Piscina','Spa','Restaurante','Gimnasio','Estacionamiento']
+            .filter(sv => h.servicios?.includes(sv))
+            .slice(0, isWide ? undefined : 3)
+            .map(sv => (
+              <View key={sv} style={c.chip}>
+                <Ionicons name={SERVICE_ICONS[sv] || 'checkmark-circle-outline'} size={12} color={Colors.titulo} />
+                <Text style={c.chipText}>{sv}</Text>
+              </View>
+            ))}
           {h.aceptaNinos && <View style={[c.chip, c.chipNinos]}><Ionicons name="happy-outline" size={12} color="#2196f3" /><Text style={[c.chipText, { color: '#2196f3' }]}>Niños</Text></View>}
           {h.aceptaMascotas && <View style={[c.chip, c.chipMascotas]}><Ionicons name="paw-outline" size={12} color="#4caf50" /><Text style={[c.chipText, { color: '#4caf50' }]}>Mascotas</Text></View>}
         </View>
 
         {/* Footer: rating + price + button */}
-        <View style={c.footer}>
-          {h.reviewsCount > 0 ? (
-            <View style={c.rating}>
-              <Text style={[c.ratingNum, h.valoracion < 3.5 && { color: Colors.error }, h.valoracion < 4.5 && h.valoracion >= 3.5 && { color: Colors.extra2 }]}>
-                {h.valoracion?.toFixed(1)}
-              </Text>
-              <View>
-                <Text style={c.ratingLabel}>{h.ratingTexto}</Text>
-                <Text style={c.ratingCount}>{h.reviewsCount} valoraciones</Text>
+        {isWide ? (
+          <View style={c.footer}>
+            {h.reviewsCount > 0 ? (
+              <View style={c.rating}>
+                <Text style={[c.ratingNum, h.valoracion < 3.5 && { color: Colors.error }, h.valoracion < 4.5 && h.valoracion >= 3.5 && { color: Colors.extra2 }]}>
+                  {h.valoracion?.toFixed(1)}
+                </Text>
+                <View>
+                  <Text style={c.ratingLabel}>{h.ratingTexto}</Text>
+                  <Text style={c.ratingCount}>{h.reviewsCount} valoraciones</Text>
+                </View>
               </View>
-            </View>
-          ) : (
-            <Text style={c.noRating}>Sin valoraciones aún</Text>
-          )}
+            ) : (
+              <Text style={c.noRating}>Sin valoraciones aún</Text>
+            )}
 
-          <View style={c.priceBlock}>
-            <View>
-              <Text style={c.desde}>desde</Text>
-              <Text style={c.price}><Text style={c.priceDollar}>$</Text>{h.precio} <Text style={c.priceUSD}>USD</Text></Text>
-              <Text style={c.noche}>por noche</Text>
+            <View style={c.priceBlock}>
+              <View>
+                <Text style={c.desde}>desde</Text>
+                <Text style={c.price}><Text style={c.priceDollar}>$</Text>{h.precio} <Text style={c.priceUSD}>USD</Text></Text>
+                <Text style={c.noche}>por noche</Text>
+              </View>
+              <TouchableOpacity style={c.btnVer} onPress={onPress} activeOpacity={0.85}>
+                <Text style={c.btnVerText}>Ver alojamiento</Text>
+                <Ionicons name="arrow-forward" size={15} color="#fff" />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity style={c.btnVer} onPress={onPress} activeOpacity={0.85}>
-              <Text style={c.btnVerText}>Ver alojamiento</Text>
-              <Ionicons name="arrow-forward" size={15} color="#fff" />
+          </View>
+        ) : (
+          <View style={c.mobileFooter}>
+            <View style={c.mobilePriceBlock}>
+              <Text style={c.desde}>desde</Text>
+              <Text style={c.price}>
+                <Text style={c.priceDollar}>$</Text>{h.precio}
+                <Text style={c.noche}>/noche</Text>
+              </Text>
+            </View>
+            <TouchableOpacity style={c.btnVerMobile} onPress={onPress} activeOpacity={0.85}>
+              <Text style={c.btnVerText}>Ver hotel</Text>
+              <Ionicons name="arrow-forward" size={14} color="#fff" />
             </TouchableOpacity>
           </View>
-        </View>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -353,7 +385,7 @@ export default function LodgingResultsScreen() {
               <View style={s.spDivider} />
 
               {/* Row 2: Habitaciones + Adultos + Niños + Buscar */}
-              <View style={[s.spRow, isWide && s.spRowWide, { alignItems: 'flex-end' }]}>
+              <View style={[s.spRow, isWide && s.spRowWide, isWide ? { alignItems: 'flex-end' } : { alignItems: 'stretch' }]}>
                 
                 {/* Habitaciones */}
                 <View style={s.spFieldNum}>
@@ -363,7 +395,7 @@ export default function LodgingResultsScreen() {
                     <TextInput
                       style={s.spInput}
                       value={habitacionesSearch}
-                      onChangeText={setHabitacionesSearch}
+                      onChangeText={(val) => setHabitacionesSearch(val.replace(/[^0-9]/g, ''))}
                       keyboardType="numeric"
                     />
                   </View>
@@ -377,7 +409,7 @@ export default function LodgingResultsScreen() {
                     <TextInput
                       style={s.spInput}
                       value={adultosSearch}
-                      onChangeText={setAdultosSearch}
+                      onChangeText={(val) => setAdultosSearch(val.replace(/[^0-9]/g, ''))}
                       keyboardType="numeric"
                     />
                   </View>
@@ -391,7 +423,7 @@ export default function LodgingResultsScreen() {
                     <TextInput
                       style={s.spInput}
                       value={ninosSearch}
-                      onChangeText={setNinosSearch}
+                      onChangeText={(val) => setNinosSearch(val.replace(/[^0-9]/g, ''))}
                       keyboardType="numeric"
                     />
                   </View>
@@ -700,7 +732,7 @@ const s = StyleSheet.create({
   modalScroll: { flex: 1 },
   modalScrollContent: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xxl },
   modalFooter: { flexDirection: 'row', gap: Spacing.md, padding: Spacing.lg, borderTopWidth: 1, borderTopColor: Colors.border, backgroundColor: Colors.surface },
-  modalClearBtn: { flex: 1, borderHeight: 1.5, borderColor: Colors.border, borderRadius: BorderRadius.md, borderWidth: 1.5, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' },
+  modalClearBtn: { flex: 1, borderColor: Colors.border, borderRadius: BorderRadius.md, borderWidth: 1.5, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' },
   modalClearBtnText: { color: Colors.subtitulo, fontWeight: '700', fontSize: 14 },
   modalApplyBtn: { flex: 2, backgroundColor: Colors.titulo, borderRadius: BorderRadius.md, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' },
   modalApplyBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
@@ -772,4 +804,15 @@ const c = StyleSheet.create({
     paddingVertical: 10, paddingHorizontal: 16,
   },
   btnVerText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+
+  // Mobile elements styling
+  ratingInline: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.primaryLight, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  ratingInlineText: { fontSize: 11, color: Colors.subtitulo },
+  mobileFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 10, marginTop: 4 },
+  mobilePriceBlock: { flexDirection: 'column', gap: 1 },
+  btnVerMobile: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: Colors.titulo, borderRadius: BorderRadius.md,
+    paddingVertical: 8, paddingHorizontal: 12,
+  },
 });
