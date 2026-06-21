@@ -461,18 +461,6 @@ export default function AttractionBookingScreen() {
             />
           ) : (
             <View style={{ gap: Spacing.md }}>
-              {/* Breadcrumb */}
-              <View style={s.breadcrumb}>
-                <TouchableOpacity onPress={() => router.push('/atracciones' as any)}>
-                  <Text style={s.breadcrumbLink}>Atracciones</Text>
-                </TouchableOpacity>
-                <Text style={s.breadcrumbSep}> › </Text>
-                <TouchableOpacity onPress={() => router.back()}>
-                  <Text style={s.breadcrumbLink} numberOfLines={1}>{detalle.nombre}</Text>
-                </TouchableOpacity>
-                <Text style={s.breadcrumbSep}> › </Text>
-                <Text style={s.breadcrumbText}>Completar reserva</Text>
-              </View>
 
               {/* Steps Indicator */}
               <View style={s.stepperRow}>
@@ -900,29 +888,6 @@ const s = StyleSheet.create({
   dropdownText: { fontSize: 12, color: Colors.extra1 },
   emptyText: { fontSize: 12, color: Colors.subtitulo, fontStyle: 'italic', marginVertical: 8 },
 
-  // Breadcrumb
-  breadcrumb: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Spacing.xs,
-    paddingHorizontal: Spacing.xs,
-    marginBottom: Spacing.xs,
-    flexWrap: 'wrap',
-  },
-  breadcrumbLink: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.titulo,
-  },
-  breadcrumbSep: {
-    fontSize: 12,
-    color: Colors.subtitulo,
-    marginHorizontal: 4,
-  },
-  breadcrumbText: {
-    fontSize: 12,
-    color: Colors.subtitulo,
-  },
 
   // Stepper
   stepperRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
