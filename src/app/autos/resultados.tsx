@@ -58,7 +58,15 @@ const SORT_OPTIONS = [
   { label: 'Precio: Mayor a Menor', value: 'price_desc' },
 ];
 
-type PickerKey = 'recogida' | 'devolucion' | 'categoria' | 'transmision' | 'sort';
+const PROVIDER_OPTIONS = [
+  { label: 'Todos', value: 'todos' },
+  { label: 'RedCar', value: 'martin' },
+  { label: 'BudgetCar', value: 'ana' },
+  { label: 'Europcar', value: 'dylan' },
+  { label: 'Rentix', value: 'kath' },
+];
+
+type PickerKey = 'proveedor' | 'recogida' | 'devolucion' | 'categoria' | 'transmision' | 'sort';
 
 interface PickerOption { label: string; value: string | number; }
 
@@ -307,6 +315,9 @@ export default function CarResultsScreen() {
   const sortLabel = (v: string) =>
     v === 'price_asc' ? 'Precio: Menor a Mayor' : v === 'price_desc' ? 'Precio: Mayor a Menor' : 'Relevancia';
 
+  const providerLabel = (v: string) =>
+    PROVIDER_OPTIONS.find(option => option.value === v)?.label ?? 'Todos';
+
   // Build picker options
   const locOptsRecogida: PickerOption[] = localizaciones.map(l => ({ label: l.nombre, value: l.idLocalizacion }));
   const locOptsDevolucion: PickerOption[] = [
@@ -343,90 +354,165 @@ export default function CarResultsScreen() {
 
           {/* Glass search panel */}
           <View style={s.searchBarFloating}>
-            <View style={[s.formRow, isWide && { flexDirection: 'row' }]}>
-              {/* Lugar de Recogida */}
-              <SelectPicker
-                label="Lugar de Recogida"
-                icon="location-outline"
-                displayValue={nombreLocalizacion(criterios.idLocalizacionRecogida ?? null)}
-                onPress={() => setOpenPicker('recogida')}
-              />
-              {/* Lugar de Devolución */}
-              <SelectPicker
-                label="Lugar de Devolución"
-                icon="location-outline"
-                displayValue={
-                  criterios.idLocalizacionDevolucion
-                    ? nombreLocalizacion(criterios.idLocalizacionDevolucion)
-                    : 'Misma sucursal'
-                }
-                onPress={() => setOpenPicker('devolucion')}
-              />
-            </View>
-
-            <View style={[s.formRow, isWide && { flexDirection: 'row' }]}>
-              {/* Fecha Recogida */}
-              <View style={s.field}>
-                <Text style={s.label}>Fecha Recogida</Text>
-                <TouchableOpacity style={s.dateTrigger} onPress={() => setShowCalRecogida(true)} activeOpacity={0.8}>
-                  <Ionicons name="calendar-outline" size={16} color={Colors.extra2} />
-                  <Text style={s.dateTriggerText}>{formatDisplayDate(criterios.fechaRecogida)}</Text>
-                </TouchableOpacity>
-              </View>
-              {/* Fecha Devolución */}
-              <View style={s.field}>
-                <Text style={s.label}>Fecha Devolución</Text>
-                <TouchableOpacity
-                  style={s.dateTrigger}
-                  onPress={() => setShowCalDevolucion(true)}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="calendar-outline" size={16} color={Colors.extra2} />
-                  <Text style={s.dateTriggerText}>{formatDisplayDate(criterios.fechaDevolucion)}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={[s.formRow, isWide && { flexDirection: 'row' }]}>
-              {/* Categoría */}
-              <SelectPicker
-                label="Categoría"
-                icon="apps-outline"
-                displayValue={criterios.nombreCategoria || 'Todas las categorías'}
-                onPress={() => setOpenPicker('categoria')}
-              />
-              {/* Marca */}
-              <View style={s.field}>
-                <Text style={s.label}>Marca</Text>
-                <View style={s.inputWrap}>
-                  <Ionicons name="car-outline" size={16} color={Colors.extra2} />
-                  <TextInput
-                    style={s.textInp}
-                    placeholder="Ej: Toyota"
-                    placeholderTextColor="rgba(96,98,86,0.5)"
-                    value={criterios.nombreMarca}
-                    onChangeText={v => setCriterios(c => ({ ...c, nombreMarca: v }))}
+            {isWide ? (
+              <>
+                <View style={[s.formRow, { flexDirection: 'row' }]}>
+                  {/* Lugar de Recogida */}
+                  <SelectPicker
+                    label="Lugar de Recogida"
+                    icon="location-outline"
+                    displayValue={nombreLocalizacion(criterios.idLocalizacionRecogida ?? null)}
+                    onPress={() => setOpenPicker('recogida')}
+                  />
+                  {/* Lugar de Devolución */}
+                  <SelectPicker
+                    label="Lugar de Devolución"
+                    icon="location-outline"
+                    displayValue={
+                      criterios.idLocalizacionDevolucion
+                        ? nombreLocalizacion(criterios.idLocalizacionDevolucion)
+                        : 'Misma sucursal'
+                    }
+                    onPress={() => setOpenPicker('devolucion')}
                   />
                 </View>
-              </View>
-            </View>
 
-            <View style={[s.formRow, isWide && { flexDirection: 'row' }]}>
-              {/* Transmisión */}
-              <SelectPicker
-                label="Transmisión"
-                icon="settings-outline"
-                displayValue={transmisionLabel(criterios.transmision || '')}
-                onPress={() => setOpenPicker('transmision')}
-              />
-              {/* Ordenar por */}
-              <SelectPicker
-                label="Ordenar por"
-                icon="filter-outline"
-                displayValue={sortLabel(criterios.sort || '')}
-                onPress={() => setOpenPicker('sort')}
-              />
-            </View>
+                <View style={[s.formRow, { flexDirection: 'row' }]}>
+                  {/* Fecha Recogida */}
+                  <View style={s.field}>
+                    <Text style={s.label}>Fecha Recogida</Text>
+                    <TouchableOpacity style={s.dateTrigger} onPress={() => setShowCalRecogida(true)} activeOpacity={0.8}>
+                      <Ionicons name="calendar-outline" size={16} color={Colors.extra2} />
+                      <Text style={s.dateTriggerText}>{formatDisplayDate(criterios.fechaRecogida || '')}</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {/* Fecha Devolución */}
+                  <View style={s.field}>
+                    <Text style={s.label}>Fecha Devolución</Text>
+                    <TouchableOpacity
+                      style={s.dateTrigger}
+                      onPress={() => setShowCalDevolucion(true)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="calendar-outline" size={16} color={Colors.extra2} />
+                      <Text style={s.dateTriggerText}>{formatDisplayDate(criterios.fechaDevolucion || '')}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={[s.formRow, { flexDirection: 'row' }]}>
+                  {/* Categoría */}
+                  <SelectPicker
+                    label="Categoría"
+                    icon="apps-outline"
+                    displayValue={criterios.nombreCategoria || 'Todas las categorías'}
+                    onPress={() => setOpenPicker('categoria')}
+                  />
+                  {/* Marca */}
+                  <View style={s.field}>
+                    <Text style={s.label}>Marca</Text>
+                    <View style={s.inputWrap}>
+                      <Ionicons name="car-outline" size={16} color={Colors.extra2} />
+                      <TextInput
+                        style={s.textInp}
+                        placeholder="Ej: Toyota"
+                        placeholderTextColor="rgba(96,98,86,0.5)"
+                        value={criterios.nombreMarca}
+                        onChangeText={v => setCriterios(c => ({ ...c, nombreMarca: v }))}
+                      />
+                    </View>
+                  </View>
+                </View>
+
+                <View style={[s.formRow, { flexDirection: 'row' }]}>
+                  {/* Transmisión */}
+                  <SelectPicker
+                    label="Transmisión"
+                    icon="settings-outline"
+                    displayValue={transmisionLabel(criterios.transmision || '')}
+                    onPress={() => setOpenPicker('transmision')}
+                  />
+                  {/* Ordenar por */}
+                  <SelectPicker
+                    label="Ordenar por"
+                    icon="filter-outline"
+                    displayValue={sortLabel(criterios.sort || '')}
+                    onPress={() => setOpenPicker('sort')}
+                  />
+                </View>
+              </>
+            ) : (
+              <>
+                <SelectPicker
+                  label="Proveedor"
+                  icon="cloud-outline"
+                  displayValue={providerLabel(criterios.proveedor || 'todos')}
+                  onPress={() => setOpenPicker('proveedor')}
+                />
+
+                <SelectPicker
+                  label="Sucursal de Recogida"
+                  icon="location-outline"
+                  displayValue={nombreLocalizacion(criterios.idLocalizacionRecogida ?? null)}
+                  onPress={() => setOpenPicker('recogida')}
+                />
+
+                <View style={s.field}>
+                  <Text style={s.label}>Fecha de Recogida</Text>
+                  <TouchableOpacity style={s.dateTrigger} onPress={() => setShowCalRecogida(true)} activeOpacity={0.8}>
+                    <Ionicons name="calendar-outline" size={16} color={Colors.extra2} />
+                    <Text style={s.dateTriggerText}>{formatDisplayDate(criterios.fechaRecogida || '')}</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={s.field}>
+                  <Text style={s.label}>Fecha de Devolución</Text>
+                  <TouchableOpacity
+                    style={s.dateTrigger}
+                    onPress={() => setShowCalDevolucion(true)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="calendar-outline" size={16} color={Colors.extra2} />
+                    <Text style={s.dateTriggerText}>{formatDisplayDate(criterios.fechaDevolucion || '')}</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <SelectPicker
+                  label="Categoría"
+                  icon="apps-outline"
+                  displayValue={criterios.nombreCategoria || 'Todas las categorías'}
+                  onPress={() => setOpenPicker('categoria')}
+                />
+
+                <SelectPicker
+                  label="Transmisión"
+                  icon="settings-outline"
+                  displayValue={transmisionLabel(criterios.transmision || '')}
+                  onPress={() => setOpenPicker('transmision')}
+                />
+
+                <View style={s.field}>
+                  <Text style={s.label}>Marca</Text>
+                  <View style={s.inputWrap}>
+                    <Ionicons name="car-outline" size={16} color={Colors.extra2} />
+                    <TextInput
+                      style={s.textInp}
+                      placeholder="Ej: Toyota"
+                      placeholderTextColor="rgba(96,98,86,0.5)"
+                      value={criterios.nombreMarca}
+                      onChangeText={v => setCriterios(c => ({ ...c, nombreMarca: v }))}
+                    />
+                  </View>
+                </View>
+
+                <SelectPicker
+                  label="Ordenar por"
+                  icon="filter-outline"
+                  displayValue={sortLabel(criterios.sort || '')}
+                  onPress={() => setOpenPicker('sort')}
+                />
+              </>
+            )}
 
             <TouchableOpacity style={s.btnBuscar} onPress={handleBuscar}>
               <Ionicons name="search" size={18} color="#fff" />
@@ -578,14 +664,14 @@ export default function CarResultsScreen() {
       {/* Calendar Modals */}
       <CalendarModal
         visible={showCalRecogida}
-        value={criterios.fechaRecogida}
+        value={criterios.fechaRecogida || ''}
         onSelect={d => setCriterios(c => ({ ...c, fechaRecogida: d }))}
         onClose={() => setShowCalRecogida(false)}
         minDate={today}
       />
       <CalendarModal
         visible={showCalDevolucion}
-        value={criterios.fechaDevolucion}
+        value={criterios.fechaDevolucion || ''}
         onSelect={d => setCriterios(c => ({ ...c, fechaDevolucion: d }))}
         onClose={() => setShowCalDevolucion(false)}
         minDate={criterios.fechaRecogida || today}
@@ -593,8 +679,21 @@ export default function CarResultsScreen() {
 
       {/* Bottom Sheet Pickers */}
       <BottomSheet
+        visible={openPicker === 'proveedor'}
+        title="Proveedor"
+        options={PROVIDER_OPTIONS}
+        activeValue={criterios.proveedor}
+        onSelect={v => setCriterios(c => ({
+          ...c,
+          proveedor: v,
+          idLocalizacionRecogida: null,
+          idLocalizacionDevolucion: null,
+        }))}
+        onClose={() => setOpenPicker(null)}
+      />
+      <BottomSheet
         visible={openPicker === 'recogida'}
-        title="Lugar de Recogida"
+        title={isWide ? 'Lugar de Recogida' : 'Sucursal de Recogida'}
         options={locOptsRecogida}
         activeValue={criterios.idLocalizacionRecogida}
         onSelect={v => setCriterios(c => ({ ...c, idLocalizacionRecogida: +v }))}
