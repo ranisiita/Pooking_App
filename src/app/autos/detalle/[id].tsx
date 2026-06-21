@@ -223,7 +223,7 @@ export default function CarDetailScreen() {
         {/* Main Grid */}
         <View style={[s.bodyLayout, isWide && { flexDirection: 'row' }]}>
           {/* Main Specs Left Column */}
-          <View style={[s.leftCol, !isWide && { flex: 0 }]}>
+          <View style={isWide ? s.leftCol : { gap: Spacing.md }}>
             {/* Location Address */}
             <View style={s.infoCard}>
               <View style={s.cardHeader}>
@@ -308,7 +308,7 @@ export default function CarDetailScreen() {
           </View>
 
           {/* Sticky Sidebar Right Column */}
-          <View style={[s.rightCol, !isWide && { flex: 0, minWidth: 0 }]}>
+          <View style={isWide ? s.rightCol : {}}>
             <View style={s.stickyCard}>
               <View style={s.stickyHeader}>
                 <Ionicons name="cash-outline" size={16} color={Colors.titulo} />
