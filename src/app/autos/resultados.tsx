@@ -66,7 +66,7 @@ const PROVIDER_OPTIONS = [
   { label: 'Rentix', value: 'kath' },
 ];
 
-type PickerKey = 'proveedor' | 'recogida' | 'devolucion' | 'categoria' | 'transmision' | 'sort';
+type PickerKey = 'recogida' | 'devolucion' | 'categoria' | 'transmision' | 'sort';
 
 interface PickerOption { label: string; value: string | number; }
 
@@ -117,22 +117,52 @@ function SelectPicker({
   label,
   icon,
   displayValue,
+  placeholder = 'Seleccionar',
+  disabled = false,
+  style,
   onPress,
 }: {
   label: string;
   icon: string;
-  displayValue: string;
+  displayValue?: string;
+  placeholder?: string;
+  disabled?: boolean;
+  style?: any;
   onPress: () => void;
 }) {
   return (
-    <View style={s.field}>
+    <View style={[s.fieldFull, style]}>
       <Text style={s.label}>{label}</Text>
-      <TouchableOpacity style={s.pickerTrigger} onPress={onPress} activeOpacity={0.8}>
+      <TouchableOpacity
+        style={[s.pickerTrigger, disabled && { opacity: 0.55 }]}
+        onPress={onPress}
+        activeOpacity={0.8}
+        disabled={disabled}
+      >
         <Ionicons name={icon as any} size={16} color={Colors.extra2} />
-        <Text style={s.pickerTriggerText} numberOfLines={1}>{displayValue || '—'}</Text>
+        <Text style={s.pickerTriggerText} numberOfLines={1}>{displayValue || placeholder}</Text>
         <Ionicons name="chevron-down" size={14} color={Colors.subtitulo} />
       </TouchableOpacity>
     </View>
+  );
+}
+
+function CarImage({ uri, style }: { uri?: string; style: any }) {
+  const [error, setError] = useState(false);
+  if (!uri || error) {
+    return (
+      <View style={[style, { alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.bg }]}>
+        <Ionicons name="car-outline" size={40} color={Colors.extra2} />
+      </View>
+    );
+  }
+  return (
+    <Image
+      source={{ uri }}
+      style={style}
+      resizeMode="cover"
+      onError={() => setError(true)}
+    />
   );
 }
 
@@ -287,7 +317,15 @@ export default function CarResultsScreen() {
   const verDetalle = async (vehiculo: VehicleItem) => {
     await setStorageItem('car-selected', JSON.stringify(vehiculo));
     if (vehiculo.provider) await setStorageItem('car-provider', vehiculo.provider);
-    router.push({ pathname: '/autos/detalle/[id]' as any, params: { id: String(vehiculo.idVehiculo) } });
+    router.push({
+      pathname: '/autos/detalle/[id]' as any,
+      params: {
+        id: String(vehiculo.idVehiculo),
+        fechaRecogida: criterios.fechaRecogida || '',
+        fechaDevolucion: criterios.fechaDevolucion || '',
+        precioDia: String(vehiculo.precio?.precioBaseDia ?? 0),
+      },
+    });
   };
 
   const handleReservar = async (vehiculo: VehicleItem) => {
@@ -327,7 +365,10 @@ export default function CarResultsScreen() {
     PROVIDER_OPTIONS.find(option => option.value === v)?.label ?? 'Todos';
 
   // Build picker options
-  const locOptsRecogida: PickerOption[] = localizaciones.map(l => ({ label: l.nombre, value: l.idLocalizacion }));
+  const locOptsRecogida: PickerOption[] = (localizaciones ?? []).map(l => ({
+    label: l.nombre,
+    value: l.idLocalizacion,
+  }));
   const locOptsDevolucion: PickerOption[] = [
     { label: 'Misma sucursal', value: 0 },
     ...localizaciones.map(l => ({ label: l.nombre, value: l.idLocalizacion })),
@@ -337,197 +378,116 @@ export default function CarResultsScreen() {
     ...categorias.map(c => ({ label: c.nombre, value: c.nombre })),
   ];
 
-  const heroHeight = isWide ? 340 : 280;
-
   return (
     <View style={s.root}>
       <Navbar />
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
 
-        {/* Hero with search panel */}
+        {/* Hero — background image only */}
         <ImageBackground
           source={{ uri: 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=1600&q=80' }}
-          style={[s.hero, { height: heroHeight }]}
+          style={[s.heroBg, { height: isWide ? 220 : 180 }]}
           resizeMode="cover"
         >
           <LinearGradient
             colors={['rgba(70,64,60,0.7)', 'rgba(142,90,84,0.6)', 'rgba(198,177,125,0.4)']}
             style={StyleSheet.absoluteFill}
           />
-
-          {/* Category label */}
           <View style={s.categoryLabel}>
             <Text style={s.categoryLabelText}>ALQUILER DE AUTOS</Text>
           </View>
-
-          {/* Glass search panel */}
-          <View style={s.searchBarFloating}>
-            {isWide ? (
-              <>
-                <View style={[s.formRow, { flexDirection: 'row' }]}>
-                  {/* Lugar de Recogida */}
-                  <SelectPicker
-                    label="Lugar de Recogida"
-                    icon="location-outline"
-                    displayValue={nombreLocalizacion(criterios.idLocalizacionRecogida ?? null)}
-                    onPress={() => setOpenPicker('recogida')}
-                  />
-                  {/* Lugar de Devolución */}
-                  <SelectPicker
-                    label="Lugar de Devolución"
-                    icon="location-outline"
-                    displayValue={
-                      criterios.idLocalizacionDevolucion
-                        ? nombreLocalizacion(criterios.idLocalizacionDevolucion)
-                        : 'Misma sucursal'
-                    }
-                    onPress={() => setOpenPicker('devolucion')}
-                  />
-                </View>
-
-                <View style={[s.formRow, { flexDirection: 'row' }]}>
-                  {/* Fecha Recogida */}
-                  <View style={s.field}>
-                    <Text style={s.label}>Fecha Recogida</Text>
-                    <TouchableOpacity style={s.dateTrigger} onPress={() => setShowCalRecogida(true)} activeOpacity={0.8}>
-                      <Ionicons name="calendar-outline" size={16} color={Colors.extra2} />
-                      <Text style={s.dateTriggerText}>{formatDisplayDate(criterios.fechaRecogida || '')}</Text>
-                    </TouchableOpacity>
-                  </View>
-                  {/* Fecha Devolución */}
-                  <View style={s.field}>
-                    <Text style={s.label}>Fecha Devolución</Text>
-                    <TouchableOpacity
-                      style={s.dateTrigger}
-                      onPress={() => setShowCalDevolucion(true)}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name="calendar-outline" size={16} color={Colors.extra2} />
-                      <Text style={s.dateTriggerText}>{formatDisplayDate(criterios.fechaDevolucion || '')}</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                <View style={[s.formRow, { flexDirection: 'row' }]}>
-                  {/* Categoría */}
-                  <SelectPicker
-                    label="Categoría"
-                    icon="apps-outline"
-                    displayValue={criterios.nombreCategoria || 'Todas las categorías'}
-                    onPress={() => setOpenPicker('categoria')}
-                  />
-                  {/* Marca */}
-                  <View style={s.field}>
-                    <Text style={s.label}>Marca</Text>
-                    <View style={s.inputWrap}>
-                      <Ionicons name="car-outline" size={16} color={Colors.extra2} />
-                      <TextInput
-                        style={s.textInp}
-                        placeholder="Ej: Toyota"
-                        placeholderTextColor="rgba(96,98,86,0.5)"
-                        value={criterios.nombreMarca}
-                        onChangeText={v => setCriterios(c => ({ ...c, nombreMarca: v }))}
-                      />
-                    </View>
-                  </View>
-                </View>
-
-                <View style={[s.formRow, { flexDirection: 'row' }]}>
-                  {/* Transmisión */}
-                  <SelectPicker
-                    label="Transmisión"
-                    icon="settings-outline"
-                    displayValue={transmisionLabel(criterios.transmision || '')}
-                    onPress={() => setOpenPicker('transmision')}
-                  />
-                  {/* Ordenar por */}
-                  <SelectPicker
-                    label="Ordenar por"
-                    icon="filter-outline"
-                    displayValue={sortLabel(criterios.sort || '')}
-                    onPress={() => setOpenPicker('sort')}
-                  />
-                </View>
-              </>
-            ) : (
-              <>
-                <SelectPicker
-                  label="Proveedor"
-                  icon="cloud-outline"
-                  displayValue={providerLabel(criterios.proveedor || 'todos')}
-                  onPress={() => setOpenPicker('proveedor')}
-                />
-
-                <SelectPicker
-                  label="Sucursal de Recogida"
-                  icon="location-outline"
-                  displayValue={nombreLocalizacion(criterios.idLocalizacionRecogida ?? null)}
-                  onPress={() => setOpenPicker('recogida')}
-                />
-
-                <View style={s.field}>
-                  <Text style={s.label}>Fecha de Recogida</Text>
-                  <TouchableOpacity style={s.dateTrigger} onPress={() => setShowCalRecogida(true)} activeOpacity={0.8}>
-                    <Ionicons name="calendar-outline" size={16} color={Colors.extra2} />
-                    <Text style={s.dateTriggerText}>{formatDisplayDate(criterios.fechaRecogida || '')}</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <View style={s.field}>
-                  <Text style={s.label}>Fecha de Devolución</Text>
-                  <TouchableOpacity
-                    style={s.dateTrigger}
-                    onPress={() => setShowCalDevolucion(true)}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="calendar-outline" size={16} color={Colors.extra2} />
-                    <Text style={s.dateTriggerText}>{formatDisplayDate(criterios.fechaDevolucion || '')}</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <SelectPicker
-                  label="Categoría"
-                  icon="apps-outline"
-                  displayValue={criterios.nombreCategoria || 'Todas las categorías'}
-                  onPress={() => setOpenPicker('categoria')}
-                />
-
-                <SelectPicker
-                  label="Transmisión"
-                  icon="settings-outline"
-                  displayValue={transmisionLabel(criterios.transmision || '')}
-                  onPress={() => setOpenPicker('transmision')}
-                />
-
-                <View style={s.field}>
-                  <Text style={s.label}>Marca</Text>
-                  <View style={s.inputWrap}>
-                    <Ionicons name="car-outline" size={16} color={Colors.extra2} />
-                    <TextInput
-                      style={s.textInp}
-                      placeholder="Ej: Toyota"
-                      placeholderTextColor="rgba(96,98,86,0.5)"
-                      value={criterios.nombreMarca}
-                      onChangeText={v => setCriterios(c => ({ ...c, nombreMarca: v }))}
-                    />
-                  </View>
-                </View>
-
-                <SelectPicker
-                  label="Ordenar por"
-                  icon="filter-outline"
-                  displayValue={sortLabel(criterios.sort || '')}
-                  onPress={() => setOpenPicker('sort')}
-                />
-              </>
-            )}
-
-            <TouchableOpacity style={s.btnBuscar} onPress={handleBuscar}>
-              <Ionicons name="search" size={18} color="#fff" />
-              <Text style={s.btnBuscarText}>Buscar Vehículos</Text>
-            </TouchableOpacity>
-          </View>
         </ImageBackground>
+
+        {/* Glass search panel — sits below hero, slightly overlapping */}
+        <View style={[s.searchBarFloating, isWide && { maxWidth: 860, alignSelf: 'center', width: '100%' }]}>
+          <Text style={s.panelTitle}>Encuentra tu auto ideal</Text>
+
+          {/* Lugar de Recogida */}
+          <SelectPicker
+            label="Lugar de Recogida"
+            icon="location-outline"
+            displayValue={nombreLocalizacion(criterios.idLocalizacionRecogida ?? null) || undefined}
+            placeholder="Selecciona sucursal"
+            disabled={locOptsRecogida.length === 0}
+            onPress={() => { if (locOptsRecogida.length > 0) setOpenPicker('recogida'); }}
+          />
+
+          {/* Lugar de Devolución */}
+          <SelectPicker
+            label="Lugar de Devolución"
+            icon="return-down-back-outline"
+            displayValue={criterios.idLocalizacionDevolucion
+              ? nombreLocalizacion(criterios.idLocalizacionDevolucion)
+              : undefined}
+            placeholder="Misma de recogida"
+            onPress={() => setOpenPicker('devolucion')}
+          />
+
+          {/* Fechas — always 2-column row */}
+          <View style={s.formRow}>
+            <View style={s.fieldRow}>
+              <Text style={s.label}>Fecha Recogida</Text>
+              <TouchableOpacity style={s.dateTrigger} onPress={() => setShowCalRecogida(true)} activeOpacity={0.8}>
+                <Ionicons name="calendar-outline" size={16} color={Colors.extra2} />
+                <Text style={s.dateTriggerText}>{formatDisplayDate(criterios.fechaRecogida || '')}</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={s.fieldRow}>
+              <Text style={s.label}>Fecha Devolución</Text>
+              <TouchableOpacity style={s.dateTrigger} onPress={() => setShowCalDevolucion(true)} activeOpacity={0.8}>
+                <Ionicons name="calendar-outline" size={16} color={Colors.extra2} />
+                <Text style={s.dateTriggerText}>{formatDisplayDate(criterios.fechaDevolucion || '')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Categoría */}
+          <SelectPicker
+            label="Categoría"
+            icon="apps-outline"
+            displayValue={criterios.nombreCategoria || undefined}
+            placeholder="Todas las categorías"
+            onPress={() => setOpenPicker('categoria')}
+          />
+
+          {/* Marca */}
+          <View style={s.fieldFull}>
+            <Text style={s.label}>Marca</Text>
+            <View style={s.inputWrap}>
+              <Ionicons name="car-outline" size={16} color={Colors.extra2} />
+              <TextInput
+                style={s.textInp}
+                placeholder="Ej: Toyota"
+                placeholderTextColor="rgba(96,98,86,0.5)"
+                value={criterios.nombreMarca}
+                onChangeText={v => setCriterios(c => ({ ...c, nombreMarca: v }))}
+              />
+            </View>
+          </View>
+
+          {/* Ordenar por + Transmisión — always 2-column row */}
+          <View style={s.formRow}>
+            <SelectPicker
+              label="Ordenar por"
+              icon="filter-outline"
+              displayValue={sortLabel(criterios.sort || '')}
+              style={s.fieldRow}
+              onPress={() => setOpenPicker('sort')}
+            />
+            <SelectPicker
+              label="Transmisión"
+              icon="settings-outline"
+              displayValue={transmisionLabel(criterios.transmision || '')}
+              style={s.fieldRow}
+              onPress={() => setOpenPicker('transmision')}
+            />
+          </View>
+
+          <TouchableOpacity style={s.btnBuscar} onPress={handleBuscar}>
+            <Ionicons name="search" size={18} color="#fff" />
+            <Text style={s.btnBuscarText}>Buscar autos</Text>
+          </TouchableOpacity>
+        </View>
 
         {/* Results Body */}
         <View style={s.mainContent}>
@@ -583,11 +543,7 @@ export default function CarResultsScreen() {
 
                   {/* Card Image */}
                   <View style={s.imageWrap}>
-                    <Image
-                      source={{ uri: v.imagenUrl || 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=800&q=80' }}
-                      style={s.image}
-                      resizeMode="cover"
-                    />
+                    <CarImage uri={v.imagenUrl} style={s.image} />
                     <View style={s.locationTag}>
                       <Ionicons name="location" size={12} color="#fff" />
                       <Text style={s.locationTagText}>{v.localizacion?.nombre || 'Sucursal'}</Text>
@@ -686,19 +642,6 @@ export default function CarResultsScreen() {
       />
 
       {/* Bottom Sheet Pickers */}
-      <BottomSheet
-        visible={openPicker === 'proveedor'}
-        title="Proveedor"
-        options={PROVIDER_OPTIONS}
-        activeValue={criterios.proveedor}
-        onSelect={v => setCriterios(c => ({
-          ...c,
-          proveedor: v,
-          idLocalizacionRecogida: null,
-          idLocalizacionDevolucion: null,
-        }))}
-        onClose={() => setOpenPicker(null)}
-      />
       <BottomSheet
         visible={openPicker === 'recogida'}
         title={isWide ? 'Lugar de Recogida' : 'Sucursal de Recogida'}
@@ -803,11 +746,10 @@ const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.bg },
   scroll: { flexGrow: 1 },
 
-  // Hero
-  hero: {
+  // Hero background (fixed height, image + label only)
+  heroBg: {
     width: '100%',
     justifyContent: 'flex-end',
-    paddingBottom: 0,
   },
   categoryLabel: {
     position: 'absolute',
@@ -825,7 +767,7 @@ const s = StyleSheet.create({
     letterSpacing: 1.2,
   },
 
-  // Search panel glass
+  // Search panel glass — sits outside hero with slight overlap
   searchBarFloating: {
     backgroundColor: 'rgba(255,255,255,0.97)',
     borderWidth: 2,
@@ -833,12 +775,29 @@ const s = StyleSheet.create({
     borderRadius: BorderRadius.lg,
     padding: Spacing.md,
     margin: Spacing.md,
+    marginTop: -20,
     gap: Spacing.md,
     ...Shadow.lg,
   },
+  panelTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: Colors.titulo,
+  },
   formRow: {
+    flexDirection: 'row',
     gap: Spacing.md,
   },
+  // Standalone (full-width) field — no flex: 1 to avoid column collapse
+  fieldFull: {
+    gap: 4,
+  },
+  // Field inside a row — flex: 1 for equal split
+  fieldRow: {
+    flex: 1,
+    gap: 4,
+  },
+  // Keep for legacy usage
   field: {
     flex: 1,
     gap: 4,
