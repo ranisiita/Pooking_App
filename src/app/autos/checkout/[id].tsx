@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, ActivityIndicator, Platform, KeyboardAvoidingView,
+  Modal, Pressable,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -53,6 +54,43 @@ interface ExtraConCantidad {
   cantidad: number;
 }
 
+interface BSOption { label: string; value: string | number; }
+
+function BottomSheet({
+  visible, title, options, activeValue, onSelect, onClose,
+}: {
+  visible: boolean; title: string; options: BSOption[];
+  activeValue: string | number | null | undefined;
+  onSelect: (v: any) => void; onClose: () => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={bs.overlay} onPress={onClose}>
+        <View style={bs.sheet}>
+          <View style={bs.handle} />
+          <Text style={bs.title}>{title}</Text>
+          <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+            {options.map((opt, idx) => {
+              const isActive = String(opt.value) === String(activeValue ?? '');
+              return (
+                <TouchableOpacity
+                  key={idx}
+                  style={[bs.item, isActive && bs.itemActive]}
+                  onPress={() => { onSelect(opt.value); onClose(); }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[bs.itemText, isActive && bs.itemTextActive]}>{opt.label}</Text>
+                  {isActive && <Ionicons name="checkmark" size={18} color={Colors.titulo} />}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      </Pressable>
+    </Modal>
+  );
+}
+
 export default function CarCheckoutScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -60,6 +98,8 @@ export default function CarCheckoutScreen() {
   const [vehiculo, setVehiculo] = useState<VehicleItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [openPicker, setOpenPicker] = useState<'devolucion' | 'tipoDoc' | null>(null);
   
   const [localizaciones, setLocalizaciones] = useState<LocationItem[]>([]);
   const [extras, setExtras] = useState<ExtraConCantidad[]>([]);
@@ -349,31 +389,13 @@ export default function CarCheckoutScreen() {
               {/* Sucursal Devolución */}
               <View style={s.field}>
                 <Text style={s.label}>Sucursal de devolución</Text>
-                <View style={s.pickerWrap}>
+                <TouchableOpacity style={s.inputWrap} onPress={() => setOpenPicker('devolucion')} activeOpacity={0.8}>
                   <Ionicons name="location-outline" size={16} color={Colors.extra2} />
-                  <TextInput
-                    style={s.textInp}
-                    placeholder="Misma de recogida"
-                    value={localizaciones.find(l => l.idLocalizacion === idLocalizacionDevolucion)?.nombre || 'Misma sucursal de recogida'}
-                    editable={false}
-                  />
-                  {localizaciones.length > 0 && (
-                    <ScrollView style={s.dropdownScroll} nestedScrollEnabled>
-                      <TouchableOpacity style={s.dropdownItem} onPress={() => setIdLocalizacionDevolucion(vehiculo.localizacion?.idLocalizacion ?? null)}>
-                        <Text style={s.dropdownText}>Misma sucursal de recogida</Text>
-                      </TouchableOpacity>
-                      {localizaciones.map(l => (
-                        <TouchableOpacity
-                          key={l.idLocalizacion}
-                          style={s.dropdownItem}
-                          onPress={() => setIdLocalizacionDevolucion(l.idLocalizacion)}
-                        >
-                          <Text style={s.dropdownText}>{l.nombre}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  )}
-                </View>
+                  <Text style={[s.textInp, { paddingVertical: 0 }]} numberOfLines={1}>
+                    {localizaciones.find(l => l.idLocalizacion === idLocalizacionDevolucion)?.nombre || 'Misma sucursal de recogida'}
+                  </Text>
+                  <Ionicons name="chevron-down" size={14} color={Colors.subtitulo} />
+                </TouchableOpacity>
               </View>
 
               {/* Horarios */}
@@ -445,20 +467,11 @@ export default function CarCheckoutScreen() {
                 <View style={s.row}>
                   <View style={s.field}>
                     <Text style={s.label}>Tipo de Documento</Text>
-                    <View style={s.pickerWrap}>
-                      <TextInput style={s.textInp} value={conductor.tipoIdentificacion} editable={false} />
-                      <ScrollView style={s.dropdownScroll} nestedScrollEnabled>
-                        <TouchableOpacity style={s.dropdownItem} onPress={() => setConductor({ ...conductor, tipoIdentificacion: 'CEDULA' })}>
-                          <Text style={s.dropdownText}>CEDULA</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={s.dropdownItem} onPress={() => setConductor({ ...conductor, tipoIdentificacion: 'PASAPORTE' })}>
-                          <Text style={s.dropdownText}>PASAPORTE</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={s.dropdownItem} onPress={() => setConductor({ ...conductor, tipoIdentificacion: 'RUC' })}>
-                          <Text style={s.dropdownText}>RUC</Text>
-                        </TouchableOpacity>
-                      </ScrollView>
-                    </View>
+                    <TouchableOpacity style={s.inputWrap} onPress={() => setOpenPicker('tipoDoc')} activeOpacity={0.8}>
+                      <Ionicons name="card-outline" size={16} color={Colors.extra2} />
+                      <Text style={[s.textInp, { paddingVertical: 0, flex: 1 }]}>{conductor.tipoIdentificacion}</Text>
+                      <Ionicons name="chevron-down" size={14} color={Colors.subtitulo} />
+                    </TouchableOpacity>
                   </View>
                   <View style={s.field}>
                     <Text style={s.label}>Número de Documento *</Text>
@@ -614,9 +627,59 @@ export default function CarCheckoutScreen() {
         </View>
         <Footer />
       </ScrollView>
+
+      {/* Bottom Sheet Pickers */}
+      <BottomSheet
+        visible={openPicker === 'devolucion'}
+        title="Sucursal de Devolución"
+        options={[
+          { label: 'Misma sucursal de recogida', value: 0 },
+          ...localizaciones.map(l => ({ label: l.nombre, value: l.idLocalizacion })),
+        ]}
+        activeValue={idLocalizacionDevolucion ?? 0}
+        onSelect={v => setIdLocalizacionDevolucion(+v === 0 ? (vehiculo?.localizacion?.idLocalizacion ?? null) : +v)}
+        onClose={() => setOpenPicker(null)}
+      />
+      <BottomSheet
+        visible={openPicker === 'tipoDoc'}
+        title="Tipo de Documento"
+        options={[
+          { label: 'CEDULA', value: 'CEDULA' },
+          { label: 'PASAPORTE', value: 'PASAPORTE' },
+          { label: 'RUC', value: 'RUC' },
+        ]}
+        activeValue={conductor.tipoIdentificacion}
+        onSelect={v => setConductor({ ...conductor, tipoIdentificacion: v })}
+        onClose={() => setOpenPicker(null)}
+      />
     </KeyboardAvoidingView>
   );
 }
+
+const bs = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  sheet: {
+    backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    paddingBottom: 32, paddingTop: 8, maxHeight: '70%',
+  },
+  handle: {
+    width: 40, height: 4, borderRadius: 2, backgroundColor: 'rgba(198,177,125,0.4)',
+    alignSelf: 'center', marginBottom: 12,
+  },
+  title: {
+    fontSize: 15, fontWeight: '700', color: Colors.titulo, textAlign: 'center',
+    paddingHorizontal: 24, paddingBottom: Spacing.sm,
+    borderBottomWidth: 1, borderBottomColor: 'rgba(198,177,125,0.2)', marginBottom: 4,
+  },
+  item: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 14, paddingHorizontal: 24,
+    borderBottomWidth: 1, borderBottomColor: 'rgba(198,177,125,0.1)',
+  },
+  itemActive: { backgroundColor: Colors.primaryLight },
+  itemText: { flex: 1, fontSize: 15, color: Colors.extra1 },
+  itemTextActive: { color: Colors.titulo, fontWeight: '600' },
+});
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.bg },
@@ -676,12 +739,8 @@ const s = StyleSheet.create({
   label: { fontSize: 10, fontWeight: '700', color: Colors.subtitulo, textTransform: 'uppercase', letterSpacing: 0.5 },
   inputWrap: { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: Colors.accentBorder, borderRadius: BorderRadius.sm, paddingHorizontal: 10, height: 42, backgroundColor: Colors.bg },
   inputWrapError: { borderColor: Colors.error },
-  pickerWrap: { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: Colors.accentBorder, borderRadius: BorderRadius.sm, paddingHorizontal: 10, height: 42, backgroundColor: Colors.bg, zIndex: 10 },
   textInp: { flex: 1, fontSize: 13, color: Colors.extra1 },
-  dropdownScroll: { position: 'absolute', top: 40, left: 0, right: 0, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, maxHeight: 120, zIndex: 100, borderRadius: BorderRadius.sm, ...Shadow.md, display: Platform.OS === 'web' ? 'flex' : 'none' },
-  dropdownItem: { paddingVertical: 8, paddingHorizontal: Spacing.sm, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  dropdownText: { fontSize: 12, color: Colors.extra1 },
-  row: { flexDirection: Platform.OS === 'web' ? 'row' : 'column', gap: Spacing.md },
+  row: { flexDirection: 'row', gap: Spacing.sm },
   err: { color: Colors.error, fontSize: 11, marginTop: 1 },
 
   // Extras
