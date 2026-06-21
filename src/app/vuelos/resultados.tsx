@@ -387,29 +387,30 @@ export default function FlightResultsScreen() {
                         <View style={s.cardRoute}>
                           <View style={s.routeNode}>
                             <Text style={s.routeTime}>{v.salida}</Text>
-                            <Text style={s.routeIata}>{v.origen}</Text>
-                            <Text style={s.routeAirport} numberOfLines={1}>
-                              {v.nombreOrigen || 'Aeropuerto'}
-                            </Text>
+                            <Text style={s.routeIata}>{v.origen || searchOrigen}</Text>
+                            {!!v.nombreOrigen && (
+                              <Text style={s.routeAirport} numberOfLines={1}>{v.nombreOrigen}</Text>
+                            )}
                           </View>
 
                           <View style={s.routeJourney}>
                             <Text style={s.journeyDuration}>{v.duracion}</Text>
                             <View style={s.journeyPathLine}>
                               <View style={s.pathLine} />
-                              <Ionicons name="airplane" size={14} color={Colors.titulo} style={s.pathPlane} />
                             </View>
-                            <Text style={[s.journeyStops, { color: v.escalas === 0 ? Colors.success : '#f59e0b' }]}>
-                              {v.escalas === 0 ? 'Directo' : `${v.escalas} escala${v.escalas > 1 ? 's' : ''}`}
-                            </Text>
+                            <View style={[s.journeyStopsPill, v.escalas === 0 ? s.journeyStopsDirect : s.journeyStopsScales]}>
+                              <Text style={[s.journeyStopsText, { color: v.escalas === 0 ? Colors.success : '#f59e0b' }]}>
+                                {v.escalas === 0 ? 'Directo' : `${v.escalas} escala${v.escalas > 1 ? 's' : ''}`}
+                              </Text>
+                            </View>
                           </View>
 
                           <View style={[s.routeNode, { alignItems: 'flex-end' }]}>
                             <Text style={s.routeTime}>{v.llegada}</Text>
-                            <Text style={s.routeIata}>{v.destino}</Text>
-                            <Text style={s.routeAirport} numberOfLines={1}>
-                              {v.nombreDestino || 'Aeropuerto'}
-                            </Text>
+                            <Text style={s.routeIata}>{v.destino || searchDestino}</Text>
+                            {!!v.nombreDestino && (
+                              <Text style={s.routeAirport} numberOfLines={1}>{v.nombreDestino}</Text>
+                            )}
                           </View>
                         </View>
 
@@ -449,8 +450,6 @@ export default function FlightResultsScreen() {
                               <Text style={s.detailsTitle}>Información del vuelo</Text>
                               <View style={s.detailsList}>
                                 <Text style={s.detailItem}><Text style={s.detailBold}>Número de vuelo:</Text> {v.nombreComercial}</Text>
-                                <Text style={s.detailItem}><Text style={s.detailBold}>Origen:</Text> {v.nombreOrigen || v.origen}</Text>
-                                <Text style={s.detailItem}><Text style={s.detailBold}>Destino:</Text> {v.nombreDestino || v.destino}</Text>
                                 <Text style={s.detailItem}><Text style={s.detailBold}>Salida:</Text> {v.fechaHoraSalida ? new Date(v.fechaHoraSalida).toLocaleString('es-EC') : v.salida}</Text>
                                 <Text style={s.detailItem}><Text style={s.detailBold}>Llegada:</Text> {v.fechaHoraLlegada ? new Date(v.fechaHoraLlegada).toLocaleString('es-EC') : v.llegada}</Text>
                                 <Text style={s.detailItem}><Text style={s.detailBold}>Duración:</Text> {v.duracion}</Text>
@@ -521,13 +520,15 @@ export default function FlightResultsScreen() {
             <View style={s.modalBody}>
               <Text style={s.modalFlightName}>{vueloParaConfirmar.proveedor} — Vuelo {vueloParaConfirmar.nombreComercial}</Text>
               <View style={s.modalRoute}>
-                <Text style={s.modalIata}>{vueloParaConfirmar.origen}</Text>
+                <Text style={s.modalIata}>{vueloParaConfirmar.origen || searchOrigen}</Text>
                 <Ionicons name="arrow-forward" size={18} color={Colors.titulo} />
-                <Text style={s.modalIata}>{vueloParaConfirmar.destino}</Text>
+                <Text style={s.modalIata}>{vueloParaConfirmar.destino || searchDestino}</Text>
               </View>
               <View style={s.modalInfoRow}>
                 <Ionicons name="time-outline" size={16} color={Colors.subtitulo} />
-                <Text style={s.modalInfoText}>{vueloParaConfirmar.salida} → {vueloParaConfirmar.llegada} ({vueloParaConfirmar.duracion})</Text>
+                <Text style={s.modalInfoText}>
+                  {vueloParaConfirmar.origen || searchOrigen} {vueloParaConfirmar.salida} → {vueloParaConfirmar.destino || searchDestino} {vueloParaConfirmar.llegada} ({vueloParaConfirmar.duracion})
+                </Text>
               </View>
               <View style={s.modalInfoRow}>
                 <Ionicons name="cash-outline" size={16} color={Colors.subtitulo} />
@@ -862,17 +863,27 @@ const s = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
     paddingHorizontal: Spacing.md,
-    height: 18,
-    position: 'relative',
+    height: 14,
     justifyContent: 'center',
   },
-  pathLine: { height: 2, backgroundColor: Colors.border, width: '80%' },
-  pathPlane: {
-    position: 'absolute',
+  pathLine: { height: 1.5, backgroundColor: Colors.border, flex: 1 },
+  journeyStopsPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    marginTop: 3,
     alignSelf: 'center',
-    transform: [{ rotate: '90deg' }],
   },
-  journeyStops: { fontSize: 11, fontWeight: '600', marginTop: 2 },
+  journeyStopsDirect: {
+    backgroundColor: 'rgba(39,174,96,0.12)',
+    borderColor: 'rgba(39,174,96,0.25)',
+  },
+  journeyStopsScales: {
+    backgroundColor: 'rgba(245,158,11,0.12)',
+    borderColor: 'rgba(245,158,11,0.25)',
+  },
+  journeyStopsText: { fontSize: 11, fontWeight: '600' },
 
   // Card Footer
   cardFooter: {
