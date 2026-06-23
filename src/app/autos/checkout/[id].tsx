@@ -485,22 +485,23 @@ export default function CarCheckoutScreen() {
                   </View>
                 </View>
 
+                <View style={s.field}>
+                  <Text style={s.label}>Fecha Vencimiento Licencia *</Text>
+                  <TouchableOpacity
+                    style={[s.inputWrap, errConductor.fechaVencimientoLicencia && s.inputWrapError]}
+                    onPress={() => setCalLicencia('main')}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="calendar-outline" size={16} color={Colors.extra2} />
+                    <Text style={[s.textInp, { paddingVertical: 0, color: conductor.fechaVencimientoLicencia ? Colors.extra1 : Colors.textMuted }]}>
+                      {conductor.fechaVencimientoLicencia || 'Seleccionar fecha'}
+                    </Text>
+                    <Ionicons name="chevron-down" size={14} color={Colors.subtitulo} />
+                  </TouchableOpacity>
+                  {errConductor.fechaVencimientoLicencia && <Text style={s.err}>{errConductor.fechaVencimientoLicencia}</Text>}
+                </View>
+
                 <View style={s.row}>
-                  <View style={s.field}>
-                    <Text style={s.label}>Fecha Vencimiento Licencia *</Text>
-                    <TouchableOpacity
-                      style={[s.inputWrap, errConductor.fechaVencimientoLicencia && s.inputWrapError]}
-                      onPress={() => setCalLicencia('main')}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name="calendar-outline" size={16} color={Colors.extra2} />
-                      <Text style={[s.textInp, { paddingVertical: 0, color: conductor.fechaVencimientoLicencia ? Colors.extra1 : Colors.textMuted }]}>
-                        {conductor.fechaVencimientoLicencia || 'Seleccionar fecha'}
-                      </Text>
-                      <Ionicons name="chevron-down" size={14} color={Colors.subtitulo} />
-                    </TouchableOpacity>
-                    {errConductor.fechaVencimientoLicencia && <Text style={s.err}>{errConductor.fechaVencimientoLicencia}</Text>}
-                  </View>
                   <View style={s.field}>
                     <Text style={s.label}>Edad *</Text>
                     <View style={[s.inputWrap, errConductor.edadConductor && s.inputWrapError]}>
@@ -508,6 +509,7 @@ export default function CarCheckoutScreen() {
                     </View>
                     {errConductor.edadConductor && <Text style={s.err}>{errConductor.edadConductor}</Text>}
                   </View>
+                  <View style={{ flex: 1 }} />
                 </View>
 
                 <View style={s.row}>
@@ -626,20 +628,20 @@ export default function CarCheckoutScreen() {
 
           {/* Action Buttons */}
           <View style={s.actions}>
+            <TouchableOpacity style={s.btnPrimary} onPress={handleContinuar}>
+              <Text style={s.btnPrimaryText}>{paso === 1 ? 'Continuar al conductor' : 'Confirmar datos e ir a pagar'}</Text>
+              <Ionicons name="arrow-forward" size={16} color="#fff" />
+            </TouchableOpacity>
+
             {paso === 2 ? (
               <TouchableOpacity style={s.btnBackNormal} onPress={() => setPaso(1)}>
-                <Text style={s.btnBackNormalText}>Volver a Extras</Text>
+                <Text style={s.btnBackNormalText}>← Volver a Extras</Text>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity style={s.btnBackNormal} onPress={() => router.back()}>
                 <Text style={s.btnBackNormalText}>Cancelar</Text>
               </TouchableOpacity>
             )}
-
-            <TouchableOpacity style={s.btnPrimary} onPress={handleContinuar}>
-              <Text style={s.btnPrimaryText}>{paso === 1 ? 'Continuar al conductor' : 'Confirmar datos e ir a pagar'}</Text>
-              <Ionicons name="arrow-forward" size={16} color="#fff" />
-            </TouchableOpacity>
           </View>
         </View>
         <Footer />
@@ -805,9 +807,9 @@ const s = StyleSheet.create({
   passengerTitle: { fontSize: 13, fontWeight: '700', color: Colors.extra1 },
 
   // Actions
-  actions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: Spacing.md, gap: Spacing.sm },
-  btnBackNormal: { flex: 1, paddingVertical: 12, borderRadius: BorderRadius.sm, borderWidth: 1, borderColor: Colors.titulo, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' },
-  btnBackNormalText: { color: Colors.titulo, fontWeight: '700', fontSize: 14 },
-  btnPrimary: { flex: 1.5, flexDirection: 'row', gap: 6, paddingVertical: 12, borderRadius: BorderRadius.sm, backgroundColor: Colors.titulo, alignItems: 'center', justifyContent: 'center', ...Shadow.sm },
-  btnPrimaryText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  actions: { flexDirection: 'column', marginTop: Spacing.md, gap: Spacing.sm },
+  btnBackNormal: { paddingVertical: 12, borderRadius: BorderRadius.sm, borderWidth: 1, borderColor: Colors.titulo, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' },
+  btnBackNormalText: { color: Colors.titulo, fontWeight: '600', fontSize: 14 },
+  btnPrimary: { flexDirection: 'row', gap: 8, paddingVertical: 14, borderRadius: BorderRadius.sm, backgroundColor: Colors.titulo, alignItems: 'center', justifyContent: 'center', ...Shadow.sm },
+  btnPrimaryText: { color: '#fff', fontWeight: '700', fontSize: 15 },
 });
