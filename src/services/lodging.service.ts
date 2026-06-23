@@ -10,6 +10,8 @@ import {
   ReservaResponse,
   SearchCriteria,
 } from '../types/lodging.types';
+import { ApiError } from './error-messages';
+import { fetchWithTimeout } from './http';
 
 const API_GATEWAY_URL = process.env.EXPO_PUBLIC_API_GATEWAY_URL ?? '';
 const PROVIDERS = ['juan', 'jorge', 'kelvin', 'jose', 'mateo'];
@@ -109,7 +111,7 @@ export async function buscarLodgings(criterios: SearchCriteria): Promise<Lodging
     PROVIDERS.map(async (provider) => {
       try {
         const url = `${API_GATEWAY_URL}/${provider}/api/v1/accommodations/search${queryString}`;
-        const res = await fetch(url, { signal: AbortSignal.timeout(60000) });
+        const res = await fetchWithTimeout(url, 60000);
         if (!res.ok) return [];
         const data = await res.json();
         const items = data?.items || [];
@@ -251,20 +253,27 @@ export async function getReviews(
 export async function crearReserva(
   provider: string,
   payload: ReservaPayload
-): Promise<ReservaResponse | null> {
+): Promise<ReservaResponse> {
+  const url = `${API_GATEWAY_URL}/${provider}/api/v1/accommodations/reservas`;
+  let res: Response;
   try {
-    const url = `${API_GATEWAY_URL}/${provider}/api/v1/accommodations/reservas`;
-    const res = await fetch(url, {
+    res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) return null;
-    return await res.json();
   } catch (err) {
+    // Error de red / conexión → status 0 para que el helper muestre el mensaje de conexión.
     console.error(`Error creating reservation with provider ${provider}:`, err);
-    return null;
+    throw new ApiError(0);
   }
+  if (!res.ok) {
+    let body: any = null;
+    try { body = await res.json(); } catch { /* sin cuerpo */ }
+    // 409 = conflicto de disponibilidad → lo mapea la pantalla con getUserFriendlyErrorMessage(err, 'booking').
+    throw new ApiError(res.status, body);
+  }
+  return await res.json();
 }
 
 export async function getReservaByGuid(
@@ -273,7 +282,7 @@ export async function getReservaByGuid(
 ): Promise<any | null> {
   try {
     const url = `${API_GATEWAY_URL}/${provider}/api/v1/accommodations/reservas/${reservaGuid}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
+    const res = await fetchWithTimeout(url, 3000);
     if (!res.ok) return null;
     return await res.json();
   } catch (err) {

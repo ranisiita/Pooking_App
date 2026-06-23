@@ -12,6 +12,7 @@ import CalendarModal from '../../../components/CalendarModal';
 import { AtraccionesService, ATTRACTION_PROVIDER_LABELS, getProviderCompanyName } from '../../../services/atracciones.service';
 import { Colors, Spacing, BorderRadius, Shadow } from '../../../constants/theme';
 import { getStorageItem, setStorageItem } from '../../../services/storage';
+import { getUserFriendlyErrorMessage } from '../../../services/error-messages';
 
 const API_GATEWAY_URL = process.env.EXPO_PUBLIC_API_GATEWAY_URL ?? '';
 
@@ -340,8 +341,9 @@ export default function AttractionBookingScreen() {
 
       setMostrarPago(false);
     } catch (err) {
+      // 409 → "Ya no existe disponibilidad en el horario escogido." (y otros status mapeados)
       console.error(err);
-      alert('Error procesando el pago de tu experiencia.');
+      alert(getUserFriendlyErrorMessage(err, 'booking'));
     } finally {
       setEnviandoPago(false);
     }

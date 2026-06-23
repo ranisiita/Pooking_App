@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView,
-  Modal, FlatList, ActivityIndicator, Platform,
+  Modal, FlatList, ActivityIndicator, Platform, KeyboardAvoidingView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
@@ -13,6 +14,7 @@ import {
   registrarUsuario, checkUsernameDisponible, checkCorreoDisponible,
   checkIdentificacionDisponible, type TipoIdentificacion,
 } from '../services/auth.service';
+import { getUserFriendlyErrorMessage } from '../services/error-messages';
 import {
   validateUsername, validateCorreo, validatePassword, validateConfirmPassword,
   validateTipoIdentificacion, validateNumeroIdentificacion, validateNombres,
@@ -89,6 +91,7 @@ const STEPS = ['Datos de acceso', 'Datos personales', 'Confirmación'];
 
 export default function SignupScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
 
@@ -218,8 +221,14 @@ export default function SignupScreen() {
     const messages = result.messages ?? ['Ocurrió un error al registrarte.'];
     const mapped = mapBackendErrors(messages);
     setBackendErrors(mapped.fieldErrors);
-    setGeneralError(mapped.unmapped.join(' • '));
-    showToast(messages.join(' • '));
+    // 409 en registro = usuario/correo ya registrado. Si el backend no mapeó a un campo,
+    // mostramos un mensaje claro y consistente; si sí lo mapeó, conservamos el del backend.
+    const noFieldMapped = Object.keys(mapped.fieldErrors).length === 0;
+    const general = result.status === 409 && noFieldMapped
+      ? getUserFriendlyErrorMessage(409, 'auth')
+      : mapped.unmapped.join(' • ');
+    setGeneralError(general);
+    showToast(general || messages.join(' • '));
     setTouched(true);
     setStep(mapped.step);
   };
@@ -238,7 +247,8 @@ export default function SignupScreen() {
   return (
     <View style={s.root}>
       <Navbar />
-      <ScrollView contentContainerStyle={s.scroll}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
         <View style={s.card}>
           <View style={s.logoWrap}>
             <Text style={s.logo}>Pooking.com</Text>
@@ -444,6 +454,7 @@ export default function SignupScreen() {
 
         <Footer />
       </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Modal selector de prefijo telefónico */}
       <Modal visible={prefixOpen} transparent animationType="fade" onRequestClose={() => setPrefixOpen(false)}>
@@ -465,9 +476,9 @@ export default function SignupScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Toast */}
+      {/* Toast — debajo de la barra de estado (safe area), nunca encima de ella */}
       {!!toast && (
-        <View style={s.toastWrap} pointerEvents="box-none">
+        <View style={[s.toastWrap, { top: Platform.OS === 'web' ? 24 : insets.top + 8 }]} pointerEvents="box-none">
           <View style={[s.toast, toast.type === 'success' ? s.toastSuccess : s.toastError]}>
             <Ionicons name={toast.type === 'success' ? 'checkmark-circle' : 'alert-circle'} size={20} color={toast.type === 'success' ? Colors.success : Colors.error} />
             <View style={{ flex: 1 }}>

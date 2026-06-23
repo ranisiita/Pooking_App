@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Spacing, BorderRadius, Shadow } from '../constants/theme';
 import { getStorageItem, removeStorageItem } from '../services/storage';
 
@@ -70,6 +71,8 @@ export default function Navbar({ transparent = false }: NavbarProps) {
 
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+  // Inset superior del dispositivo (barra de estado / notch). En web es 0.
+  const insets = useSafeAreaInsets();
 
   const iconColor      = transparent ? '#fff'        : Colors.extra1;
   const iconHoverColor = transparent ? Colors.extra2 : Colors.titulo;
@@ -83,6 +86,8 @@ export default function Navbar({ transparent = false }: NavbarProps) {
       : Platform.OS === 'web'
         ? { position: 'sticky' as any, top: 0, backdropFilter: 'blur(10px)' }
         : null,
+    // Empuja el header por debajo de la barra de estado del celular.
+    { paddingTop: insets.top, height: 64 + insets.top },
   ];
 
   return (

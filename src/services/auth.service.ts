@@ -2,6 +2,8 @@
 // Migrado desde Pooking_Interface (signup component + usuario/cliente validators)
 // HttpClient (Angular) reemplazado por fetch (built-in), igual que el resto de servicios.
 
+import { fetchWithTimeout } from './http';
+
 const API_GATEWAY_URL = process.env.EXPO_PUBLIC_API_GATEWAY_URL ?? '';
 const BOOKING_BASE = `${API_GATEWAY_URL}/api/v2/booking`;
 
@@ -43,7 +45,7 @@ function parseDisponible(res: any): boolean {
 
 async function getDisponible(url: string): Promise<boolean> {
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    const res = await fetchWithTimeout(url, 15000);
     if (!res.ok) return true; // ante error de servidor, dejamos pasar (igual que catchError -> of(null) en Angular)
     const data = await res.json();
     return parseDisponible(data);

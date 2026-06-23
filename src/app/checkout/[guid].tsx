@@ -1,23 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Platform, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Navbar from '../../components/Navbar';
 import Footer from '../../components/Footer';
 import PaymentHall from '../../components/PaymentHall';
 import { Colors, Spacing, BorderRadius, Shadow } from '../../constants/theme';
-
-// ── Storage Helper ──────────────────────────────────────────────────────────
-async function getStorageItem(key: string): Promise<string | null> {
-  if (Platform.OS === 'web') {
-    try {
-      return localStorage.getItem(key);
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
+import { getStorageItem } from '../../services/storage';
 
 export default function StandaloneFlightCheckout() {
   const router = useRouter();

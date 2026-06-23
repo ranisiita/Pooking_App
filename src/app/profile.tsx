@@ -18,6 +18,7 @@ import Footer from '../components/Footer';
 import { Colors, Spacing, BorderRadius, Shadow, Typography } from '../constants/theme';
 import * as LodgingService from '../services/lodging.service';
 import { AtraccionesService, getProviderCompanyName, normalizeAttractionProvider, AttractionProvider } from '../services/atracciones.service';
+import { getStorageItem, setStorageItem } from '../services/storage';
 
 const { width } = Dimensions.get('window');
 
@@ -53,25 +54,9 @@ function decodeJwt(token: string): any {
   return null;
 }
 
-// ── Storage Helper ──────────────────────────────────────────────────────────
-async function getStorageItem(key: string): Promise<string | null> {
-  if (Platform.OS === 'web') {
-    try {
-      return localStorage.getItem(key);
-    } catch {
-      return null;
-    }
-  }
-  return null; // fallbacks to memory
-}
-
-async function setStorageItem(key: string, value: string): Promise<void> {
-  if (Platform.OS === 'web') {
-    try {
-      localStorage.setItem(key, value);
-    } catch {}
-  }
-}
+// ── Storage ─────────────────────────────────────────────────────────────────
+// getStorageItem / setStorageItem se importan de ../services/storage:
+// funcionan en web (localStorage) y en nativo/Expo Go (AsyncStorage).
 
 // ── Formatting helpers ──────────────────────────────────────────────────────
 function fmtDateShort(val: string): string {
