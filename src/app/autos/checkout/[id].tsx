@@ -450,6 +450,7 @@ export default function CarCheckoutScreen() {
             <View style={s.card}>
               <Text style={s.sectionTitle}>2. Datos del Conductor Principal</Text>
               <View style={s.formGrid}>
+                {/* Nombres y Apellidos — labels cortos, van bien en fila */}
                 <View style={s.row}>
                   <View style={s.field}>
                     <Text style={s.label}>Nombres *</Text>
@@ -467,22 +468,22 @@ export default function CarCheckoutScreen() {
                   </View>
                 </View>
 
-                <View style={s.row}>
-                  <View style={s.field}>
-                    <Text style={s.label}>Tipo de Documento</Text>
-                    <TouchableOpacity style={s.inputWrap} onPress={() => setOpenPicker('tipoDoc')} activeOpacity={0.8}>
-                      <Ionicons name="card-outline" size={16} color={Colors.extra2} />
-                      <Text style={[s.textInp, { paddingVertical: 0, flex: 1 }]}>{conductor.tipoIdentificacion}</Text>
-                      <Ionicons name="chevron-down" size={14} color={Colors.subtitulo} />
-                    </TouchableOpacity>
+                {/* Tipo y Número de documento — ancho completo para evitar corte de label */}
+                <View style={s.field}>
+                  <Text style={s.label}>Tipo de Documento</Text>
+                  <TouchableOpacity style={s.inputWrap} onPress={() => setOpenPicker('tipoDoc')} activeOpacity={0.8}>
+                    <Ionicons name="card-outline" size={16} color={Colors.extra2} />
+                    <Text style={[s.textInp, { paddingVertical: 0, flex: 1 }]}>{conductor.tipoIdentificacion}</Text>
+                    <Ionicons name="chevron-down" size={14} color={Colors.subtitulo} />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={s.field}>
+                  <Text style={s.label}>Número de Documento *</Text>
+                  <View style={[s.inputWrap, errConductor.numeroIdentificacion && s.inputWrapError]}>
+                    <TextInput style={s.textInp} value={conductor.numeroIdentificacion} onChangeText={v => setConductor({ ...conductor, numeroIdentificacion: v })} placeholder="Ej: 1729853921" />
                   </View>
-                  <View style={s.field}>
-                    <Text style={s.label}>Número de Documento *</Text>
-                    <View style={[s.inputWrap, errConductor.numeroIdentificacion && s.inputWrapError]}>
-                      <TextInput style={s.textInp} value={conductor.numeroIdentificacion} onChangeText={v => setConductor({ ...conductor, numeroIdentificacion: v })} placeholder="Ej: 1729853921" />
-                    </View>
-                    {errConductor.numeroIdentificacion && <Text style={s.err}>{errConductor.numeroIdentificacion}</Text>}
-                  </View>
+                  {errConductor.numeroIdentificacion && <Text style={s.err}>{errConductor.numeroIdentificacion}</Text>}
                 </View>
 
                 <View style={s.field}>
@@ -501,32 +502,30 @@ export default function CarCheckoutScreen() {
                   {errConductor.fechaVencimientoLicencia && <Text style={s.err}>{errConductor.fechaVencimientoLicencia}</Text>}
                 </View>
 
+                {/* Edad y Correo — labels cortos, caben en fila */}
                 <View style={s.row}>
                   <View style={s.field}>
                     <Text style={s.label}>Edad *</Text>
                     <View style={[s.inputWrap, errConductor.edadConductor && s.inputWrapError]}>
-                      <TextInput style={s.textInp} value={conductor.edadConductor} onChangeText={v => setConductor({ ...conductor, edadConductor: v })} keyboardType="numeric" placeholder="Edad" />
+                      <TextInput style={s.textInp} value={conductor.edadConductor} onChangeText={v => setConductor({ ...conductor, edadConductor: v })} keyboardType="numeric" placeholder="Ej: 25" />
                     </View>
                     {errConductor.edadConductor && <Text style={s.err}>{errConductor.edadConductor}</Text>}
                   </View>
-                  <View style={{ flex: 1 }} />
-                </View>
-
-                <View style={s.row}>
                   <View style={s.field}>
-                    <Text style={s.label}>Correo Electrónico *</Text>
-                    <View style={[s.inputWrap, errConductor.correo && s.inputWrapError]}>
-                      <TextInput style={s.textInp} value={conductor.correo} onChangeText={v => setConductor({ ...conductor, correo: v })} keyboardType="email-address" placeholder="correo@ejemplo.com" />
-                    </View>
-                    {errConductor.correo && <Text style={s.err}>{errConductor.correo}</Text>}
-                  </View>
-                  <View style={s.field}>
-                    <Text style={s.label}>Teléfono de Contacto *</Text>
+                    <Text style={s.label}>Teléfono *</Text>
                     <View style={[s.inputWrap, errConductor.telefono && s.inputWrapError]}>
                       <TextInput style={s.textInp} value={conductor.telefono} onChangeText={v => setConductor({ ...conductor, telefono: v })} keyboardType="phone-pad" placeholder="0991234567" />
                     </View>
                     {errConductor.telefono && <Text style={s.err}>{errConductor.telefono}</Text>}
                   </View>
+                </View>
+
+                <View style={s.field}>
+                  <Text style={s.label}>Correo Electrónico *</Text>
+                  <View style={[s.inputWrap, errConductor.correo && s.inputWrapError]}>
+                    <TextInput style={s.textInp} value={conductor.correo} onChangeText={v => setConductor({ ...conductor, correo: v })} keyboardType="email-address" placeholder="correo@ejemplo.com" />
+                  </View>
+                  {errConductor.correo && <Text style={s.err}>{errConductor.correo}</Text>}
                 </View>
               </View>
 
@@ -568,29 +567,28 @@ export default function CarCheckoutScreen() {
                       </View>
                     </View>
 
-                    <View style={s.row}>
-                      <View style={s.field}>
-                        <Text style={s.label}>Documento *</Text>
-                        <View style={[s.inputWrap, errPasajeros[i]?.numeroIdentificacion && s.inputWrapError]}>
-                          <TextInput style={s.textInp} value={p.numeroIdentificacion} onChangeText={v => {
-                            const next = [...otrosPasajeros]; next[i].numeroIdentificacion = v; setOtrosPasajeros(next);
-                          }} placeholder="Identificación" />
-                        </View>
+                    <View style={s.field}>
+                      <Text style={s.label}>Documento *</Text>
+                      <View style={[s.inputWrap, errPasajeros[i]?.numeroIdentificacion && s.inputWrapError]}>
+                        <TextInput style={s.textInp} value={p.numeroIdentificacion} onChangeText={v => {
+                          const next = [...otrosPasajeros]; next[i].numeroIdentificacion = v; setOtrosPasajeros(next);
+                        }} placeholder="Identificación" />
                       </View>
-                      <View style={s.field}>
-                        <Text style={s.label}>Licencia Vence *</Text>
-                        <TouchableOpacity
-                          style={[s.inputWrap, errPasajeros[i]?.fechaVencimientoLicencia && s.inputWrapError]}
-                          onPress={() => setCalLicencia(i)}
-                          activeOpacity={0.8}
-                        >
-                          <Ionicons name="calendar-outline" size={16} color={Colors.extra2} />
-                          <Text style={[s.textInp, { paddingVertical: 0, color: p.fechaVencimientoLicencia ? Colors.extra1 : Colors.textMuted }]}>
-                            {p.fechaVencimientoLicencia || 'Seleccionar fecha'}
-                          </Text>
-                          <Ionicons name="chevron-down" size={14} color={Colors.subtitulo} />
-                        </TouchableOpacity>
-                      </View>
+                    </View>
+
+                    <View style={s.field}>
+                      <Text style={s.label}>Licencia Vence *</Text>
+                      <TouchableOpacity
+                        style={[s.inputWrap, errPasajeros[i]?.fechaVencimientoLicencia && s.inputWrapError]}
+                        onPress={() => setCalLicencia(i)}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="calendar-outline" size={16} color={Colors.extra2} />
+                        <Text style={[s.textInp, { paddingVertical: 0, color: p.fechaVencimientoLicencia ? Colors.extra1 : Colors.textMuted }]}>
+                          {p.fechaVencimientoLicencia || 'Seleccionar fecha'}
+                        </Text>
+                        <Ionicons name="chevron-down" size={14} color={Colors.subtitulo} />
+                      </TouchableOpacity>
                     </View>
 
                     <View style={s.row}>
@@ -599,25 +597,25 @@ export default function CarCheckoutScreen() {
                         <View style={[s.inputWrap, errPasajeros[i]?.edadConductor && s.inputWrapError]}>
                           <TextInput style={s.textInp} value={p.edadConductor} onChangeText={v => {
                             const next = [...otrosPasajeros]; next[i].edadConductor = v; setOtrosPasajeros(next);
-                          }} keyboardType="numeric" placeholder="Edad" />
+                          }} keyboardType="numeric" placeholder="Ej: 25" />
                         </View>
                       </View>
                       <View style={s.field}>
-                        <Text style={s.label}>Correo *</Text>
-                        <View style={[s.inputWrap, errPasajeros[i]?.correo && s.inputWrapError]}>
-                          <TextInput style={s.textInp} value={p.correo} onChangeText={v => {
-                            const next = [...otrosPasajeros]; next[i].correo = v; setOtrosPasajeros(next);
-                          }} placeholder="Correo" />
+                        <Text style={s.label}>Teléfono *</Text>
+                        <View style={[s.inputWrap, errPasajeros[i]?.telefono && s.inputWrapError]}>
+                          <TextInput style={s.textInp} value={p.telefono} onChangeText={v => {
+                            const next = [...otrosPasajeros]; next[i].telefono = v; setOtrosPasajeros(next);
+                          }} placeholder="Teléfono" />
                         </View>
                       </View>
                     </View>
-                    
+
                     <View style={s.field}>
-                      <Text style={s.label}>Teléfono *</Text>
-                      <View style={[s.inputWrap, errPasajeros[i]?.telefono && s.inputWrapError]}>
-                        <TextInput style={s.textInp} value={p.telefono} onChangeText={v => {
-                          const next = [...otrosPasajeros]; next[i].telefono = v; setOtrosPasajeros(next);
-                        }} placeholder="Teléfono" />
+                      <Text style={s.label}>Correo *</Text>
+                      <View style={[s.inputWrap, errPasajeros[i]?.correo && s.inputWrapError]}>
+                        <TextInput style={s.textInp} value={p.correo} onChangeText={v => {
+                          const next = [...otrosPasajeros]; next[i].correo = v; setOtrosPasajeros(next);
+                        }} placeholder="correo@ejemplo.com" />
                       </View>
                     </View>
                   </View>
