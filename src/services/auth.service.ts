@@ -77,9 +77,9 @@ export function checkIdentificacionDisponible(
   return getDisponible(`${BOOKING_BASE}/clientes/disponibilidad/${segment}/${encodeURIComponent(numero)}`);
 }
 
-// ── Registro ───────────────────────────────────────────────────────
+// ── Manejo de errores compartido (login + registro) ────────────────
 /** Extrae los mensajes de error del cuerpo de la respuesta (replica el manejo de Angular). */
-function extractErrorMessages(body: any, status: number): string[] {
+function extractErrorMessages(body: any, status: number, defaultMsg = 'Ocurrió un error.'): string[] {
   if (typeof body === 'string') {
     try { body = JSON.parse(body); } catch { /* se queda como string */ }
   }
@@ -96,9 +96,88 @@ function extractErrorMessages(body: any, status: number): string[] {
     body?.title ??
     body?.detail ??
     (typeof body === 'string' ? body : null) ??
-    `Error ${status}: Ocurrió un error al registrarte.`;
+    `Error ${status}: ${defaultMsg}`;
 
   return [typeof raw === 'string' ? raw : JSON.stringify(raw)];
+}
+
+// ── Login ──────────────────────────────────────────────────────────
+export interface LoginResult {
+  ok: boolean;
+  token?: string;
+  usuarioGuid?: string;
+  roles?: string[];
+  guidCliente?: string;
+  status?: number;
+  messages?: string[];
+  /** Errores mapeados a campos del formulario de login. */
+  fieldErrors?: Partial<Record<'identificador' | 'password', string>>;
+}
+
+/** Mapea errores de validación del backend a los campos del login. */
+function extractLoginFieldErrors(body: any): Partial<Record<'identificador' | 'password', string>> {
+  const out: Partial<Record<'identificador' | 'password', string>> = {};
+  if (body?.errors && typeof body.errors === 'object' && !Array.isArray(body.errors)) {
+    Object.keys(body.errors).forEach((key) => {
+      const lk = key.toLowerCase();
+      const raw = (body.errors as any)[key];
+      const msg = Array.isArray(raw) ? raw[0] : raw;
+      if (typeof msg !== 'string') return;
+      if (lk.includes('identificador') || lk.includes('usuario') || lk.includes('correo')) out.identificador = msg;
+      if (lk.includes('password') || lk.includes('contrase')) out.password = msg;
+    });
+  }
+  return out;
+}
+
+/** Obtiene el guidCliente asociado al usuario (segundo endpoint, igual que Angular). */
+export async function fetchGuidCliente(usuarioGuid: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${BOOKING_BASE}/clientes/usuario-guid/${encodeURIComponent(usuarioGuid)}`);
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json?.data?.guidCliente ?? null;
+  } catch (err) {
+    console.error('Error obteniendo guidCliente:', err);
+    return null;
+  }
+}
+
+export async function loginUsuario(identificador: string, password: string): Promise<LoginResult> {
+  try {
+    const res = await fetch(`${BOOKING_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identificador, password }),
+    });
+
+    if (!res.ok) {
+      let body: any = null;
+      try { body = await res.json(); } catch { try { body = await res.text(); } catch { body = null; } }
+      return {
+        ok: false,
+        status: res.status,
+        messages: extractErrorMessages(body, res.status, 'Credenciales inválidas. Por favor intenta de nuevo.'),
+        fieldErrors: extractLoginFieldErrors(body),
+      };
+    }
+
+    const response = await res.json();
+    const token = response?.data?.token || response?.token;
+    const usuarioGuid =
+      response?.data?.usuarioGuid || response?.usuarioGuid || response?.data?.guid || response?.guid;
+    const roles = response?.data?.roles || response?.roles || [];
+
+    let guidCliente: string | undefined;
+    if (token && usuarioGuid) {
+      guidCliente = (await fetchGuidCliente(usuarioGuid)) ?? undefined;
+    }
+
+    return { ok: true, token, usuarioGuid, roles, guidCliente };
+  } catch (err) {
+    console.error('Error al iniciar sesión:', err);
+    return { ok: false, messages: ['No se pudo conectar con el servidor. Revisa tu conexión e intenta de nuevo.'] };
+  }
 }
 
 export async function registrarUsuario(payload: RegistroPayload): Promise<RegistroResult> {
@@ -118,7 +197,7 @@ export async function registrarUsuario(payload: RegistroPayload): Promise<Regist
       try { body = await res.text(); } catch { body = null; }
     }
 
-    return { ok: false, status: res.status, messages: extractErrorMessages(body, res.status) };
+    return { ok: false, status: res.status, messages: extractErrorMessages(body, res.status, 'Ocurrió un error al registrarte.') };
   } catch (err) {
     console.error('Error al registrar usuario:', err);
     return { ok: false, messages: ['No se pudo conectar con el servidor. Revisa tu conexión e intenta de nuevo.'] };

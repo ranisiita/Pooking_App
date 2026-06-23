@@ -144,7 +144,7 @@ export type SignupField =
   | 'tipo_identificacion' | 'numero_identificacion'
   | 'nombres' | 'apellidos' | 'razon_social' | 'telefono' | 'direccion';
 
-const FIELD_MAP: Array<{ keywords: string[]; field: SignupField; step: 1 | 2 }> = [
+const FIELD_MAP: { keywords: string[]; field: SignupField; step: 1 | 2 }[] = [
   { keywords: ['usuario', 'username'], field: 'username', step: 1 },
   { keywords: ['correo', 'email'], field: 'correo', step: 1 },
   { keywords: ['contraseña', 'password'], field: 'password', step: 1 },

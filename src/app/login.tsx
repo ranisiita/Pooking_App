@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -7,8 +7,9 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { Colors, Spacing, BorderRadius, Shadow } from '../constants/theme';
 import { setStorageItem } from '../services/storage';
+import { loginUsuario } from '../services/auth.service';
 
-function IconInput({ icon, value, onChangeText, placeholder, keyboardType = 'default', secureTextEntry = false, hasError = false }: any) {
+function IconInput({ icon, value, onChangeText, placeholder, keyboardType = 'default', secureTextEntry = false, hasError = false, autoCapitalize = 'none' }: any) {
   const [focus, setFocus] = useState(false);
   return (
     <View style={[inp.wrap, focus && inp.wrapFocus, hasError && inp.wrapError]}>
@@ -21,6 +22,8 @@ function IconInput({ icon, value, onChangeText, placeholder, keyboardType = 'def
         placeholderTextColor="rgba(96,98,86,0.5)"
         keyboardType={keyboardType}
         secureTextEntry={secureTextEntry}
+        autoCapitalize={autoCapitalize}
+        autoCorrect={false}
         onFocus={() => setFocus(true)}
         onBlur={() => setFocus(false)}
       />
@@ -45,7 +48,7 @@ export default function LoginScreen() {
 
   const validate = (): boolean => {
     const e: Record<string, string> = {};
-    if (!identificador) e.identificador = 'El usuario o correo es requerido.';
+    if (!identificador.trim()) e.identificador = 'El usuario o correo es requerido.';
     if (!password) e.password = 'La contraseña es requerida.';
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -57,76 +60,26 @@ export default function LoginScreen() {
     setGeneralError('');
     setErrors({});
 
-    try {
-      const apiUrl = `${process.env.EXPO_PUBLIC_API_GATEWAY_URL ?? ''}/api/v2/booking/auth/login`;
-      const res = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identificador, password })
-      });
+    const result = await loginUsuario(identificador.trim(), password);
 
-      if (!res.ok) {
-        let body: any;
-        try {
-          body = await res.json();
-        } catch (e) {
-          body = await res.text();
-        }
-        let rawMessage = body?.message ?? body?.title ?? body?.detail ?? (typeof body === 'string' ? body : null) ?? `Error ${res.status}: Credenciales inválidas.`;
-        let messages: string[] = [];
-        if (Array.isArray(body?.errors)) {
-          messages = body.errors;
-        } else if (body?.errors && typeof body.errors === 'object') {
-          messages = Object.values(body.errors).flat() as string[];
-          const fieldErrors: Record<string, string> = {};
-          Object.keys(body.errors).forEach(key => {
-            const lowerKey = key.toLowerCase();
-            if (lowerKey.includes('identificador')) fieldErrors.identificador = (body.errors as any)[key][0];
-            if (lowerKey.includes('password')) fieldErrors.password = (body.errors as any)[key][0];
-          });
-          setErrors(fieldErrors);
-        }
-
-        if (messages.length > 0) {
-          setGeneralError(messages.join(' • '));
-        } else {
-          setGeneralError(typeof rawMessage === 'string' ? rawMessage : JSON.stringify(rawMessage));
-        }
-        setLoading(false);
-        return;
+    if (!result.ok) {
+      if (result.fieldErrors && Object.keys(result.fieldErrors).length > 0) {
+        setErrors(result.fieldErrors);
       }
-
-      const response = await res.json();
-      const token = response?.data?.token || response?.token;
-      const guid = response?.data?.usuarioGuid || response?.usuarioGuid || response?.data?.guid || response?.guid;
-      const roles = response?.data?.roles || response?.roles || [];
-
-      if (token && guid) {
-        await setStorageItem('token', token);
-        await setStorageItem('usuarioGuid', guid);
-        await setStorageItem('roles', JSON.stringify(roles));
-
-        const clienteUrl = `${process.env.EXPO_PUBLIC_API_GATEWAY_URL ?? ''}/api/v2/booking/clientes/usuario-guid/${guid}`;
-        try {
-          const clienteRes = await fetch(clienteUrl);
-          if (clienteRes.ok) {
-            const clienteJson = await clienteRes.json();
-            const guidCliente = clienteJson?.data?.guidCliente;
-            if (guidCliente) {
-              await setStorageItem('guidCliente', guidCliente);
-            }
-          }
-        } catch (err) {
-          console.error('Error fetching guidCliente:', err);
-        }
-      }
-
+      setGeneralError((result.messages ?? ['Credenciales inválidas.']).join(' • '));
       setLoading(false);
-      router.push('/');
-    } catch (err: any) {
-      setGeneralError(err.message || 'Error de conexión');
-      setLoading(false);
+      return;
     }
+
+    if (result.token && result.usuarioGuid) {
+      await setStorageItem('token', result.token);
+      await setStorageItem('usuarioGuid', result.usuarioGuid);
+      await setStorageItem('roles', JSON.stringify(result.roles ?? []));
+      if (result.guidCliente) await setStorageItem('guidCliente', result.guidCliente);
+    }
+
+    setLoading(false);
+    router.replace('/');
   };
 
   return (
@@ -149,7 +102,7 @@ export default function LoginScreen() {
             {generalError ? <Text style={s.generalError}>{generalError}</Text> : null}
             <View>
               <Text style={s.fieldLabel}>Usuario o Correo <Text style={{ color: Colors.titulo }}>*</Text></Text>
-              <IconInput icon="mail-outline" value={identificador} onChangeText={setIdentificador} placeholder="correo@ejemplo.com" keyboardType="email-address" hasError={!!errors.identificador} />
+              <IconInput icon="person-outline" value={identificador} onChangeText={setIdentificador} placeholder="Tu usuario o correo" hasError={!!errors.identificador} />
               {!!errors.identificador && <Text style={s.fieldError}>{errors.identificador}</Text>}
             </View>
 
