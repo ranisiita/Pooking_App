@@ -422,12 +422,12 @@ const s = StyleSheet.create({
     backgroundColor: '#8E5A54',
   },
   heroImage: {
-    ...StyleSheet.absoluteFill,
+    ...StyleSheet.absoluteFillObject,
     width: '100%',
     height: '100%',
   },
   heroOverlay: {
-    ...StyleSheet.absoluteFill,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   heroContainer: {

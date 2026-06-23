@@ -517,7 +517,7 @@ export default function AttractionsIndexScreen() {
                         </View>
                         <View style={s.metaItem}>
                           <Ionicons name="star" size={13} color={Colors.star} />
-                          <Text style={s.metaText}><strong>{atr.calificacion.toFixed(1)}</strong> ({atr.total_resenas} reseñas)</Text>
+                          <Text style={s.metaText}><Text style={s.metaTextBold}>{atr.calificacion.toFixed(1)}</Text> ({atr.total_resenas} reseñas)</Text>
                         </View>
                         <View style={s.metaItem}>
                           <Ionicons name="language" size={13} color={Colors.subtitulo} />
@@ -751,6 +751,7 @@ const s = StyleSheet.create({
   cardMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   metaText: { fontSize: 12, color: Colors.subtitulo },
+  metaTextBold: { fontWeight: '700' },
 
   acDispInfo: { marginTop: 4 },
 

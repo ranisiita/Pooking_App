@@ -1128,8 +1128,8 @@ const s = StyleSheet.create({
   btnPrimaryText: { color: '#fff', fontWeight: '700', fontSize: 13 },
 
   // Overlays
-  paymentOverlay: { ...StyleSheet.absoluteFill, backgroundColor: Colors.bg, zIndex: 1000 },
-  invoiceOverlay: { ...StyleSheet.absoluteFill, backgroundColor: Colors.overlay, justifyContent: 'center', alignItems: 'center', padding: Spacing.md, zIndex: 2000 },
+  paymentOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: Colors.bg, zIndex: 1000 },
+  invoiceOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: Colors.overlay, justifyContent: 'center', alignItems: 'center', padding: Spacing.md, zIndex: 2000 },
   invoiceCard: { backgroundColor: Colors.surface, borderRadius: BorderRadius.lg, borderTopWidth: 5, borderTopColor: Colors.success, width: '100%', maxWidth: 500, padding: Spacing.lg, gap: Spacing.md, ...Shadow.lg },
   invHeader: { alignItems: 'center', gap: Spacing.xs },
   invTitle: { fontSize: 18, fontWeight: '700', color: Colors.success, textAlign: 'center' },

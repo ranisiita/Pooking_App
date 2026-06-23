@@ -966,7 +966,7 @@ const s = StyleSheet.create({
 
   // Confirmation Modal
   modalOverlay: {
-    ...StyleSheet.absoluteFill,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: Colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',

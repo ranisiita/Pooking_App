@@ -431,8 +431,8 @@ const s = StyleSheet.create({
     paddingTop: Spacing.lg + 20,
     paddingBottom: Spacing.md,
   },
-  heroImage: { ...StyleSheet.absoluteFill, width: '100%', height: '100%' },
-  heroOverlay: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.48)' },
+  heroImage: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
+  heroOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.48)' },
   heroContainer: {
     zIndex: 2,
     padding: Spacing.md,
