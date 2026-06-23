@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,9 +9,10 @@ import {
   Pressable,
   useWindowDimensions,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Spacing, BorderRadius, Shadow } from '../constants/theme';
+import { getStorageItem, removeStorageItem } from '../services/storage';
 
 interface NavbarProps {
   transparent?: boolean;
@@ -29,8 +30,43 @@ export default function Navbar({ transparent = false }: NavbarProps) {
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
 
-  const isLoggedIn = false;
-  const isAdmin = false;
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      const checkAuth = async () => {
+        const token = await getStorageItem('token');
+        const rolesStr = await getStorageItem('roles');
+        if (!active) return;
+        setIsLoggedIn(!!token);
+        if (rolesStr) {
+          try {
+            const roles = JSON.parse(rolesStr);
+            setIsAdmin(roles.includes('Admin') || roles.includes('SuperAdmin'));
+          } catch (e) {
+            setIsAdmin(false);
+          }
+        } else {
+          setIsAdmin(false);
+        }
+      };
+      checkAuth();
+      return () => { active = false; };
+    }, [])
+  );
+
+  const handleLogout = async () => {
+    setShowUserDropdown(false);
+    await removeStorageItem('token');
+    await removeStorageItem('usuarioGuid');
+    await removeStorageItem('roles');
+    await removeStorageItem('guidCliente');
+    setIsLoggedIn(false);
+    setIsAdmin(false);
+    router.replace('/login');
+  };
 
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
@@ -138,8 +174,8 @@ export default function Navbar({ transparent = false }: NavbarProps) {
                 )}
                 <DropdownItem
                   icon="logout"
-                  label="Cerrar Sesión"
-                  onPress={() => setShowUserDropdown(false)}
+                  label="Salir"
+                  onPress={handleLogout}
                   danger
                 />
               </>
