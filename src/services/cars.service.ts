@@ -1,3 +1,5 @@
+import { fetchWithRetry } from './fetchWithRetry';
+
 const API_GATEWAY_URL = process.env.EXPO_PUBLIC_API_GATEWAY_URL ?? '';
 const PROVIDERS = ['martin', 'dylan', 'ana', 'kath'];
 
@@ -37,7 +39,7 @@ export class CarService {
       providersToQuery.map(async (provider) => {
         try {
           const url = `${API_GATEWAY_URL}/${provider}/api/v2/booking/vehiculos?${params.toString()}`;
-          const res = await fetch(url);
+          const res = await fetchWithRetry(url);
           if (!res.ok) return [];
           const json = await res.json();
           const vehiculos = json.data?.vehiculos || [];
@@ -59,7 +61,7 @@ export class CarService {
     }
     try {
       const url = `${API_GATEWAY_URL}/${provider}/api/v2/booking/vehiculos/${idVehiculo}`;
-      const res = await fetch(url);
+      const res = await fetchWithRetry(url);
       if (!res.ok) return null;
       const json = await res.json();
       // Defensive parsing: try the three known response shapes in order
@@ -88,7 +90,7 @@ export class CarService {
       params.set('idLocalizacion', String(idLocalizacion));
 
       const url = `${API_GATEWAY_URL}/${provider}/api/v2/booking/reservas/${idVehiculo}/disponibilidad?${params.toString()}`;
-      const res = await fetch(url);
+      const res = await fetchWithRetry(url);
       if (!res.ok) return false;
       const json = await res.json();
       return json.data?.disponibilidad?.disponible ?? false;
@@ -104,7 +106,7 @@ export class CarService {
     const requests = providersToQuery.map(async (provider) => {
       try {
         const url = `${API_GATEWAY_URL}/${provider}/api/v2/booking/localizaciones`;
-        const res = await fetch(url);
+        const res = await fetchWithRetry(url);
         if (!res.ok) return [];
         const json = await res.json();
         return json.data?.localizaciones || [];
@@ -130,7 +132,7 @@ export class CarService {
     const requests = providersToQuery.map(async (provider) => {
       try {
         const url = `${API_GATEWAY_URL}/${provider}/api/v2/booking/categorias`;
-        const res = await fetch(url);
+        const res = await fetchWithRetry(url);
         if (!res.ok) return [];
         const json = await res.json();
         return json.data?.categorias || [];
@@ -154,7 +156,7 @@ export class CarService {
     if (!provider) return [];
     try {
       const url = `${API_GATEWAY_URL}/${provider}/api/v2/booking/extras`;
-      const res = await fetch(url);
+      const res = await fetchWithRetry(url);
       if (!res.ok) return [];
       const json = await res.json();
       if (Array.isArray(json.data)) return json.data;
