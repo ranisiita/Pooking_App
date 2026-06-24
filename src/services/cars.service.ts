@@ -62,8 +62,16 @@ export class CarService {
       const res = await fetch(url);
       if (!res.ok) return null;
       const json = await res.json();
-      if (json.data?.vehiculo) {
-        return { ...json.data.vehiculo, provider };
+      // Defensive parsing: try the three known response shapes in order
+      //   1. { data: { vehiculo: {...} } }  — primary (martin/RedCar)
+      //   2. { data: { idVehiculo, ... } }  — vehicle object directly in data
+      //   3. { idVehiculo, ... }            — vehicle object at root level
+      const vehiculo =
+        json.data?.vehiculo ??
+        (json.data?.idVehiculo ? json.data : null) ??
+        (json.idVehiculo ? json : null);
+      if (vehiculo) {
+        return { ...vehiculo, provider };
       }
       return null;
     } catch (err) {

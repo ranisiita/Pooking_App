@@ -66,8 +66,9 @@ interface VehicleItem {
 
 export default function CarDetailScreen() {
   const router = useRouter();
-  const { id, fechaRecogida, fechaDevolucion, precioDia } = useLocalSearchParams<{
+  const { id, provider: providerParam, fechaRecogida, fechaDevolucion, precioDia } = useLocalSearchParams<{
     id: string;
+    provider?: string;
     fechaRecogida?: string;
     fechaDevolucion?: string;
     precioDia?: string;
@@ -85,7 +86,10 @@ export default function CarDetailScreen() {
       setLoading(true);
       setError(null);
       try {
-        const provider = await getStorageItem('car-provider');
+        // Prefer the provider passed as route param (avoids AsyncStorage race condition);
+        // fall back to storage only for deep-link entries that bypass resultados.tsx
+        const provider = (providerParam && providerParam.length > 0 ? providerParam : null)
+          ?? await getStorageItem('car-provider');
         if (!provider) {
           setError('No se pudo encontrar el proveedor de alquiler en la sesión.');
           setLoading(false);
