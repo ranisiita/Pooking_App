@@ -1,4 +1,5 @@
 import { fetchWithRetry } from './fetchWithRetry';
+import { ApiError } from './error-messages';
 
 const API_GATEWAY_URL = process.env.EXPO_PUBLIC_API_GATEWAY_URL ?? '';
 const PROVIDERS = ['martin', 'dylan', 'ana', 'kath'];
@@ -169,20 +170,26 @@ export class CarService {
   }
 
   static async crearReserva(provider: string, payload: any): Promise<any | null> {
+    const url = `${API_GATEWAY_URL}/${provider}/api/v2/booking/reservas`;
+    let res: Response;
     try {
-      const url = `${API_GATEWAY_URL}/${provider}/api/v2/booking/reservas`;
-      const res = await fetch(url, {
+      res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) return null;
-      const json = await res.json();
-      return json.data ?? null;
     } catch (err) {
       console.error('Error creating car reservation:', err);
-      return null;
+      throw new ApiError(0); // error de red / conexión
     }
+    if (!res.ok) {
+      let body: any = null;
+      try { body = await res.json(); } catch { /* sin cuerpo */ }
+      // 409 = el vehículo ya no está disponible → la pantalla lo mapea con context 'booking'.
+      throw new ApiError(res.status, body);
+    }
+    const json = await res.json();
+    return json.data ?? null;
   }
 
   static async registrarReservaCliente(payload: any, token: string): Promise<any> {

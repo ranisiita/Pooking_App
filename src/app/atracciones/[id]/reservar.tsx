@@ -8,10 +8,12 @@ import { Ionicons } from '@expo/vector-icons';
 import Navbar from '../../../components/Navbar';
 import Footer from '../../../components/Footer';
 import PaymentHall from '../../../components/PaymentHall';
+import ProcessingOverlay from '../../../components/ProcessingOverlay';
 import CalendarModal from '../../../components/CalendarModal';
 import { AtraccionesService, ATTRACTION_PROVIDER_LABELS, getProviderCompanyName } from '../../../services/atracciones.service';
 import { Colors, Spacing, BorderRadius, Shadow } from '../../../constants/theme';
 import { getStorageItem, setStorageItem } from '../../../services/storage';
+import { getUserFriendlyErrorMessage } from '../../../services/error-messages';
 
 const API_GATEWAY_URL = process.env.EXPO_PUBLIC_API_GATEWAY_URL ?? '';
 
@@ -250,6 +252,7 @@ export default function AttractionBookingScreen() {
   };
 
   const handlePagoExitoso = async () => {
+    if (enviandoPago) return; // evita doble ejecución / reservas y pagos duplicados
     if (!detalle || !horarioSeleccionado) return;
     setEnviandoPago(true);
     try {
@@ -340,8 +343,9 @@ export default function AttractionBookingScreen() {
 
       setMostrarPago(false);
     } catch (err) {
+      // 409 → "Ya no existe disponibilidad en el horario escogido." (y otros status mapeados)
       console.error(err);
-      alert('Error procesando el pago de tu experiencia.');
+      alert(getUserFriendlyErrorMessage(err, 'booking'));
     } finally {
       setEnviandoPago(false);
     }
@@ -385,6 +389,8 @@ export default function AttractionBookingScreen() {
   return (
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Navbar />
+      {/* Flotante de carga: bloquea el toque mientras se procesa el pago → sin doble tap ni reservas duplicadas */}
+      <ProcessingOverlay visible={enviandoPago} title="Procesando pago..." subtitle="Esto puede demorar unos segundos." />
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
         <View style={s.container} onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}>
           {factura ? (

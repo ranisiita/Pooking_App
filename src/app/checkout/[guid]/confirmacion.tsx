@@ -1,30 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Navbar from '../../../components/Navbar';
 import Footer from '../../../components/Footer';
 import { Colors, Spacing, BorderRadius, Shadow } from '../../../constants/theme';
-
-// ── Storage Helper ──────────────────────────────────────────────────────────
-async function getStorageItem(key: string): Promise<string | null> {
-  if (Platform.OS === 'web') {
-    try {
-      return localStorage.getItem(key);
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
-
-async function removeStorageItem(key: string): Promise<void> {
-  if (Platform.OS === 'web') {
-    try {
-      localStorage.removeItem(key);
-    } catch {}
-  }
-}
+import { getStorageItem, removeStorageItem } from '../../../services/storage';
 
 export default function StandaloneFlightConfirmation() {
   const router = useRouter();

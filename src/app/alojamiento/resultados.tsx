@@ -191,7 +191,9 @@ export default function LodgingResultsScreen() {
       adultos: params.adultos ? +params.adultos : undefined,
       ninos: params.ninos ? +params.ninos : undefined,
       habitaciones: params.habitaciones ? +params.habitaciones : undefined,
-    }).then(data => { setLodgings(data); setLoading(false); });
+    })
+      .then(data => { setLodgings(data); setLoading(false); })
+      .catch(() => { setLodgings([]); setLoading(false); });
   }, [params.destino, params.llegada, params.salida, params.habitaciones, params.adultos, params.ninos]);
 
   const executeNewSearch = () => {

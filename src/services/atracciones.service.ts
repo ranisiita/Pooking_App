@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { ApiError } from './error-messages';
 
 const API_GATEWAY_URL = process.env.EXPO_PUBLIC_API_GATEWAY_URL ?? '';
 
@@ -196,36 +197,47 @@ export class AtraccionesService {
 
   // 8. POST /reservas
   static async crearReserva(payload: any, provider: AttractionProvider = ACTIVE_ATTRACTION_PROVIDER): Promise<any> {
+    const url = this.getReservasUrl(provider);
+    let res: Response;
     try {
-      const url = this.getReservasUrl(provider);
-      const res = await fetch(url, {
+      res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) return null;
-      return await res.json();
     } catch (err) {
       console.warn(`[Atracciones] Error creating reservation in ${provider}:`, err);
-      return null;
+      throw new ApiError(0); // error de red / conexión
     }
+    if (!res.ok) {
+      let body: any = null;
+      try { body = await res.json(); } catch { /* sin cuerpo */ }
+      // 409 = el horario ya no tiene cupos → la pantalla lo mapea con context 'booking'.
+      throw new ApiError(res.status, body);
+    }
+    return await res.json();
   }
 
   // 9. POST /reservas/{guid}/pagos/confirmacion
   static async confirmarPago(guid: string, body: any, provider: AttractionProvider = ACTIVE_ATTRACTION_PROVIDER): Promise<any> {
+    const url = `${this.getReservasUrl(provider)}/${guid}/pagos/confirmacion`;
+    let res: Response;
     try {
-      const url = `${this.getReservasUrl(provider)}/${guid}/pagos/confirmacion`;
-      const res = await fetch(url, {
+      res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (!res.ok) return null;
-      return await res.json();
     } catch (err) {
       console.warn(`[Atracciones] Error confirming payment for ${guid} in ${provider}:`, err);
-      return null;
+      throw new ApiError(0); // error de red / conexión
     }
+    if (!res.ok) {
+      let errBody: any = null;
+      try { errBody = await res.json(); } catch { /* sin cuerpo */ }
+      throw new ApiError(res.status, errBody);
+    }
+    return await res.json();
   }
 
   // Fanout para 'todos'

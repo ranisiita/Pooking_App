@@ -10,6 +10,7 @@ import Navbar from '../../../components/Navbar';
 import Footer from '../../../components/Footer';
 import PaymentHall from '../../../components/PaymentHall';
 import { crearReserva } from '../../../services/lodging.service';
+import { getUserFriendlyErrorMessage } from '../../../services/error-messages';
 import { getStorageItem, setStorageItem } from '../../../services/storage';
 import { Colors, Spacing, BorderRadius, Shadow } from '../../../constants/theme';
 
@@ -360,13 +361,16 @@ export default function LodgingBookingScreen() {
       habitaciones: habitacionesPayload,
     };
 
-    const res = await crearReserva(params.provider, payload);
-    setProcesando(false);
-
-    if (!res) {
-      setErrorMsg('Hubo un error al procesar tu reserva. Por favor intenta de nuevo.');
+    let res;
+    try {
+      res = await crearReserva(params.provider, payload);
+    } catch (err) {
+      // 409 → "Ya no existe disponibilidad en el horario escogido." (y otros status mapeados)
+      setProcesando(false);
+      setErrorMsg(getUserFriendlyErrorMessage(err, 'booking'));
       return;
     }
+    setProcesando(false);
 
     // Save to middleware
     const token = await getStorageItem('token');

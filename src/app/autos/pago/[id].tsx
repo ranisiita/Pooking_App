@@ -11,6 +11,7 @@ import PaymentHall from '../../../components/PaymentHall';
 import { CarService } from '../../../services/cars.service';
 import { Colors, Spacing, BorderRadius, Shadow } from '../../../constants/theme';
 import { getStorageItem, setStorageItem, removeStorageItem } from '../../../services/storage';
+import { getUserFriendlyErrorMessage } from '../../../services/error-messages';
 
 const { width } = Dimensions.get('window');
 
@@ -235,9 +236,10 @@ export default function CarPaymentScreen() {
       });
 
     } catch (err) {
+      // 409 → "Ya no existe disponibilidad en el horario escogido." (y otros status mapeados)
       console.error(err);
       setConfirmando(false);
-      alert('Error al procesar y guardar tu reserva de auto.');
+      alert(getUserFriendlyErrorMessage(err, 'booking'));
     }
   };
 

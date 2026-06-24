@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -45,6 +45,7 @@ export default function LoginScreen() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
 
   const validate = (): boolean => {
     const e: Record<string, string> = {};
@@ -78,14 +79,17 @@ export default function LoginScreen() {
       if (result.guidCliente) await setStorageItem('guidCliente', result.guidCliente);
     }
 
+    // Mostrar confirmación breve antes de navegar (equivalente al banner de éxito de Angular).
     setLoading(false);
-    router.replace('/');
+    setSuccess(true);
+    setTimeout(() => router.replace('/'), 900);
   };
 
   return (
     <View style={s.root}>
       <Navbar />
-      <ScrollView contentContainerStyle={s.scroll}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
         {/* Background decorativo */}
         <View style={s.bgDeco}>
           <LinearGradient colors={['rgba(142,90,84,0.12)', 'rgba(198,177,125,0.08)']} style={StyleSheet.absoluteFill} />
@@ -99,6 +103,7 @@ export default function LoginScreen() {
           </View>
 
           <View style={s.form}>
+            {success ? <Text style={s.successBox}>✓ ¡Bienvenido! Redirigiendo...</Text> : null}
             {generalError ? <Text style={s.generalError}>{generalError}</Text> : null}
             <View>
               <Text style={s.fieldLabel}>Usuario o Correo <Text style={{ color: Colors.titulo }}>*</Text></Text>
@@ -116,7 +121,7 @@ export default function LoginScreen() {
               <Text style={s.forgotText}>¿Olvidaste tu contraseña?</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={[s.btnPrimary, loading && { opacity: 0.6 }]} onPress={login} disabled={loading} activeOpacity={0.85}>
+            <TouchableOpacity style={[s.btnPrimary, (loading || success) && { opacity: 0.6 }]} onPress={login} disabled={loading || success} activeOpacity={0.85}>
               {loading ? <Text style={s.btnText}>Ingresando...</Text> : <><Ionicons name="log-in-outline" size={18} color="#fff" /><Text style={s.btnText}>Ingresar</Text></>}
             </TouchableOpacity>
 
@@ -133,6 +138,7 @@ export default function LoginScreen() {
 
         <Footer />
       </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -158,6 +164,7 @@ const s = StyleSheet.create({
   fieldLabel: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', color: Colors.extra1, letterSpacing: 0.5, marginBottom: 6 },
   fieldError: { fontSize: 12, color: Colors.error, marginTop: 3 },
   generalError: { fontSize: 13, color: Colors.error, backgroundColor: Colors.errorLight, padding: 10, borderRadius: 8, textAlign: 'center' },
+  successBox: { fontSize: 13, color: Colors.success, backgroundColor: 'rgba(39,174,96,0.1)', padding: 10, borderRadius: 8, textAlign: 'center', fontWeight: '600' },
   forgotText: { fontSize: 13, color: Colors.titulo, textDecorationLine: 'underline' },
 
   btnPrimary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: Colors.titulo, borderRadius: BorderRadius.md, paddingVertical: 15, marginTop: 4, ...Shadow.md },

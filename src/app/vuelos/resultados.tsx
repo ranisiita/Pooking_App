@@ -14,6 +14,7 @@ import AirportAutocomplete from '../../components/AirportAutocomplete';
 import { FlightService } from '../../services/flights.service';
 import { Colors, Spacing, BorderRadius, Shadow } from '../../constants/theme';
 import { getStorageItem, setStorageItem } from '../../services/storage';
+import { getUserFriendlyErrorMessage } from '../../services/error-messages';
 
 const ITEMS_PER_PAGE = 10;
 const AEROLINEAS = ['Nacho', 'Mary', 'Marcillo'] as const;
@@ -221,9 +222,11 @@ export default function FlightResultsScreen() {
       }
     } catch (err: any) {
       console.error(err);
-      if (err.status === 401) {
-        alert('Tu sesión ha expirado. Por favor inicia sesión nuevamente.');
+      if (err?.status === 401) {
+        alert(getUserFriendlyErrorMessage(err, 'booking')); // "Tu sesión ha expirado. Inicia sesión nuevamente."
         router.push('/login');
+      } else if (err?.status === 409) {
+        alert(getUserFriendlyErrorMessage(err, 'booking')); // "Ya no existe disponibilidad en el horario escogido."
       } else {
         alert('No se pudo iniciar la reserva. Redirigiendo a pasarela interna...');
         router.push({ pathname: '/checkout/[guid]', params: { guid: vuelo.guidServicio } });

@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Font from 'expo-font';
 import { Colors } from '../constants/theme';
 
@@ -29,8 +30,9 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <>
-      <StatusBar style="light" />
+    <SafeAreaProvider>
+      {/* Fondo crema claro → íconos de la barra de estado en oscuro para que se vean */}
+      <StatusBar style="dark" />
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: Colors.surface },
@@ -62,6 +64,6 @@ export default function RootLayout() {
         <Stack.Screen name="checkout/[guid]/confirmacion" />
         <Stack.Screen name="+not-found" />
       </Stack>
-    </>
+    </SafeAreaProvider>
   );
 }
