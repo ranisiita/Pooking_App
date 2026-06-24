@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Navbar from '../../../components/Navbar';
 import Footer from '../../../components/Footer';
 import PaymentHall from '../../../components/PaymentHall';
+import ProcessingOverlay from '../../../components/ProcessingOverlay';
 import CalendarModal from '../../../components/CalendarModal';
 import { AtraccionesService, ATTRACTION_PROVIDER_LABELS, getProviderCompanyName } from '../../../services/atracciones.service';
 import { Colors, Spacing, BorderRadius, Shadow } from '../../../constants/theme';
@@ -251,6 +252,7 @@ export default function AttractionBookingScreen() {
   };
 
   const handlePagoExitoso = async () => {
+    if (enviandoPago) return; // evita doble ejecución / reservas y pagos duplicados
     if (!detalle || !horarioSeleccionado) return;
     setEnviandoPago(true);
     try {
@@ -387,6 +389,8 @@ export default function AttractionBookingScreen() {
   return (
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Navbar />
+      {/* Flotante de carga: bloquea el toque mientras se procesa el pago → sin doble tap ni reservas duplicadas */}
+      <ProcessingOverlay visible={enviandoPago} title="Procesando pago..." subtitle="Esto puede demorar unos segundos." />
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
         <View style={s.container} onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}>
           {factura ? (
