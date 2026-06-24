@@ -1,3 +1,5 @@
+import { fetchWithRetry } from './fetchWithRetry';
+
 const API_GATEWAY_URL = process.env.EXPO_PUBLIC_API_GATEWAY_URL ?? '';
 const PROVEEDORES = [
   { key: 'nacho', label: 'Nacho' },
@@ -42,7 +44,7 @@ export class FlightService {
       PROVEEDORES.map(async (p) => {
         try {
           const url = `${API_GATEWAY_URL}/${p.key}/api/v1/booking/vuelos/buscar?${urlParams.toString()}`;
-          const res = await fetch(url);
+          const res = await fetchWithRetry(url);
           if (!res.ok) return [];
           const json = await res.json();
           let rawList: any[] = [];
@@ -120,7 +122,7 @@ export class FlightService {
     const requests = PROVEEDORES.map(async (p) => {
       try {
         const url = `${API_GATEWAY_URL}/${p.key}/api/v1/booking/aeropuertos?Limit=100`;
-        const res = await fetch(url);
+        const res = await fetchWithRetry(url);
         if (!res.ok) return [];
         const json = await res.json();
         return FlightService.extractAeropuertoList(json);
@@ -139,7 +141,7 @@ export class FlightService {
     const requests = PROVEEDORES.map(async (p) => {
       try {
         const url = `${API_GATEWAY_URL}/${p.key}/api/v1/booking/aeropuertos?Nombre=${encodeURIComponent(texto)}&Limit=10`;
-        const res = await fetch(url);
+        const res = await fetchWithRetry(url);
         if (!res.ok) return [];
         const json = await res.json();
         return FlightService.extractAeropuertoList(json);

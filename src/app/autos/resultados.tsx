@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, Image, ActivityIndicator, Modal, Pressable,
@@ -213,30 +213,53 @@ export default function CarResultsScreen() {
   // Picker open state (null = closed, key string = which picker is open)
   const [openPicker, setOpenPicker] = useState<PickerKey | null>(null);
 
+  // Guards Effect A from running concurrently with Effect B on mount / provider change.
+  // Effect B owns the initial search; Effect A only fires for subsequent param changes.
+  const isMountedRef = useRef(false);
+
+  // Effect B — source of truth for initial load and provider changes.
+  // Loads localizaciones/categorias first, then searches exactly once.
   useEffect(() => {
-    async function loadFilters() {
+    isMountedRef.current = false; // block Effect A while this effect is running
+    let cancelled = false;
+
+    async function loadFiltersAndSearch() {
       try {
         const prov = criterios.proveedor;
-        const locs = await CarService.getLocalizaciones(prov);
-        const cats = await CarService.getCategorias(prov);
+        const [locs, cats] = await Promise.all([
+          CarService.getLocalizaciones(prov),
+          CarService.getCategorias(prov),
+        ]);
+        if (cancelled) return;
         setLocalizaciones(locs);
         setCategorias(cats);
+
+        // Auto-select the first localizacion only if none was provided via URL params
+        let idLocOverride: number | undefined;
         if (!criterios.idLocalizacionRecogida && locs.length > 0) {
-          const autoId = locs[0].idLocalizacion;
-          // Functional update avoids overwriting a selection the user made while
-          // localizaciones were still loading (race condition guard)
-          setCriterios(c => c.idLocalizacionRecogida ? c : { ...c, idLocalizacionRecogida: autoId });
-          // Re-trigger search now that we have a valid localizacion
-          buscarResultados(autoId);
+          idLocOverride = locs[0].idLocalizacion;
+          setCriterios(c => c.idLocalizacionRecogida ? c : { ...c, idLocalizacionRecogida: idLocOverride! });
+        }
+
+        // Single deterministic search with fully-resolved criteria
+        if (!cancelled) {
+          await buscarResultados(idLocOverride);
         }
       } catch (err) {
         console.warn('Error loading filters data', err);
+      } finally {
+        if (!cancelled) isMountedRef.current = true; // unblock Effect A for future searches
       }
     }
-    loadFilters();
+
+    loadFiltersAndSearch();
+    return () => { cancelled = true; };
   }, [criterios.proveedor]);
 
+  // Effect A — only fires for subsequent searches triggered by handleBuscar (URL param changes).
+  // Skipped on initial mount because isMountedRef.current is false until Effect B completes.
   useEffect(() => {
+    if (!isMountedRef.current) return;
     buscarResultados();
   }, [
     params.fechaRecogida,
@@ -321,6 +344,8 @@ export default function CarResultsScreen() {
       pathname: '/autos/detalle/[id]' as any,
       params: {
         id: String(vehiculo.idVehiculo),
+        // Pass provider directly to avoid AsyncStorage race condition in detalle/[id].tsx
+        provider: vehiculo.provider ?? '',
         fechaRecogida: criterios.fechaRecogida || '',
         fechaDevolucion: criterios.fechaDevolucion || '',
         precioDia: String(vehiculo.precio?.precioBaseDia ?? 0),

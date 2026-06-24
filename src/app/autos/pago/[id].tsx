@@ -123,8 +123,8 @@ export default function CarPaymentScreen() {
       const token = await getStorageItem('token');
       const guidCliente = await getStorageItem('usuarioGuid');
 
-      const rec = vehiculo.disponibilidad?.fechaRecogida ?? '';
-      const dev = vehiculo.disponibilidad?.fechaDevolucion ?? '';
+      const rec = (vehiculo.disponibilidad?.fechaRecogida ?? '').split('T')[0];
+      const dev = (vehiculo.disponibilidad?.fechaDevolucion ?? '').split('T')[0];
       const idLocRec = vehiculo.localizacion?.idLocalizacion ?? 0;
       const idLocDev = times?.idLocalizacionDevolucion ?? idLocRec;
 
